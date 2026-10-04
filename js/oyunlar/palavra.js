@@ -2,6 +2,7 @@ import { tahminOyunuKur } from "../ortak/tahmin-oyunu.js";
 import { degerlendir } from "../ortak/degerlendir.js";
 import { rastgeleUretec } from "../ortak/rastgele.js";
 import { kucuk } from "../ortak/turkce.js";
+import { isaretTemizleyiciKur } from "../ortak/isaretler.js";
 
 const DURUMLAR = ["dogru", "var", "yok"];
 
@@ -50,6 +51,7 @@ oyun.tahta.addEventListener("click", (e) => {
   const yeniDurum = kare.classList.toggle("yalan-isareti");
   oyun.notlar.yaz(satirNo, harfNo, yeniDurum ? "yalan" : null);
   klavyeyiBoya();
+  temizleyiciyiGuncelle();
 });
 
 // Kayıtlı işaretleri geri yükle.
@@ -74,3 +76,8 @@ function klavyeyiBoya() {
   }
 }
 klavyeyiBoya();
+
+const temizleyiciyiGuncelle = isaretTemizleyiciKur(oyun, () => {
+  for (const kare of oyun.tahta.querySelectorAll(".kare.yalan-isareti")) kare.classList.remove("yalan-isareti");
+  klavyeyiBoya();
+});

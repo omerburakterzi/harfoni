@@ -95,7 +95,14 @@ function ekraniGuncelle(degisen) {
 
   const kalanKelime = Math.max(0, alt - ust - 1);
   const elenen = 1 - kalanKelime / (SOZLUK.length - 2);
-  document.getElementById("kalan-hak").textContent = HAK - tahminler.length;
+  const kalan = HAK - tahminler.length;
+  document.getElementById("kalan-hak").textContent = kalan;
+  const noktalar = document.getElementById("hak-noktalari");
+  if (noktalar.children.length !== HAK) {
+    noktalar.innerHTML = "";
+    for (let i = 0; i < HAK; i++) noktalar.appendChild(document.createElement("span"));
+  }
+  [...noktalar.children].forEach((nokta, i) => nokta.classList.toggle("kullanildi", i >= kalan));
   document.getElementById("elenen").textContent = `%${Math.floor(elenen * 100)}`;
   document.getElementById("ilerleme").style.width = `${elenen * 100}%`;
 

@@ -1,5 +1,6 @@
 import { tahminOyunuKur } from "../ortak/tahmin-oyunu.js";
 import { kucuk } from "../ortak/turkce.js";
+import { isaretTemizleyiciKur } from "../ortak/isaretler.js";
 
 // Muamma: hangi harflerin doğru olduğu söylenmez, sadece kaç tanesinin
 // doğru yerde, yanlış yerde ya da kelimede yok olduğu söylenir.
@@ -33,6 +34,7 @@ oyun.tahta.addEventListener("click", (e) => {
     sonraki
   );
   klavyeyiIsaretlereGoreBoya();
+  temizleyiciyiGuncelle();
 });
 
 // Bir harf herhangi bir karede "doğru yerde" işaretliyse klavyede de öyle
@@ -51,3 +53,8 @@ for (const [anahtar, deger] of Object.entries(oyun.notlar.hepsi())) {
   if (kare && "acik" in kare.dataset) kare.dataset.isaret = deger;
 }
 klavyeyiIsaretlereGoreBoya();
+
+const temizleyiciyiGuncelle = isaretTemizleyiciKur(oyun, () => {
+  for (const kare of oyun.tahta.querySelectorAll(".kare[data-isaret]")) delete kare.dataset.isaret;
+  klavyeyiIsaretlereGoreBoya();
+});

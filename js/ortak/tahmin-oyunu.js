@@ -249,6 +249,10 @@ export function tahminOyunuKur(ayarlar) {
         else delete notlar[anahtar];
         kaydet();
       },
+      temizle() {
+        notlar = {};
+        kaydet();
+      },
     },
   };
 }
