@@ -83,16 +83,12 @@ Kelimeyi bulunca anlamına TDK Sözlük'ten tek dokunuşla bakabilirsin.
 
 **Veri güvenliği (Data safety)**
 
-Uygulama içinde sitedeki Cloudflare Web Analytics sayacı da çalışıyor. Bu yüzden "hiç veri toplanmıyor" demek yerine şöyle beyan et:
+Ziyaretçi sayacı sadece harfoni.com sitesinde çalışıyor; uygulamanın içinde çalışmıyor
+ve uygulama hiçbir veri göndermiyor. Bu yüzden:
 
-- Uygulamanız veri topluyor ya da paylaşıyor mu? **Evet**
-- Toplanan veri türü: **Uygulama etkinliği → Uygulama etkileşimleri** (sayfa görüntülemeleri)
-- Paylaşılıyor mu? **Hayır** (Cloudflare bizim adımıza işleyen hizmet sağlayıcı sayılır)
-- Geçici olarak mı işleniyor? **Hayır**
-- Toplanması zorunlu mu? **Evet** (kapatma seçeneği yok)
-- Amaç: **Analiz**
-- Veriler aktarım sırasında şifreleniyor mu? **Evet** (https)
-- Kullanıcılar verilerinin silinmesini isteyebilir mi? Veri kişiye bağlı tutulmadığı için **Hayır** seçilebilir; emin olmazsan bana sor.
+- Uygulamanız gerekli kullanıcı veri türlerinden herhangi birini topluyor ya da paylaşıyor mu? **Hayır**
+
+Mağazada "Veri toplanmıyor" görünecek.
 
 **Sağlık uygulaması / finans / haber:** Hiçbiri değil.
 
