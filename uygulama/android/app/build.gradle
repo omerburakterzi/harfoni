@@ -16,8 +16,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Google Play yükleme anahtarı proje dışında tutulur (GitHub'a gitmez).
+    // Yol HARFONI_ANAHTAR ortam değişkeniyle değiştirilebilir.
+    def anahtarDosyasi = file(System.getenv("HARFONI_ANAHTAR") ?: "${System.getProperty('user.home')}/Documents/Harfoni-Anahtarlar/keystore.properties")
+    signingConfigs {
+        if (anahtarDosyasi.exists()) {
+            release {
+                def ayar = new Properties()
+                anahtarDosyasi.withInputStream { ayar.load(it) }
+                storeFile file(ayar.storeFile)
+                storePassword ayar.storePassword
+                keyAlias ayar.keyAlias
+                keyPassword ayar.keyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (anahtarDosyasi.exists()) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
