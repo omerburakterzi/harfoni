@@ -4,7 +4,7 @@
 // hemen görünür), gelen dosya önbelleğe de yazılır. İnternet yoksa önbellekteki
 // son sürüm kullanılır.
 
-const ONBELLEK = "harfoni-v6";
+const ONBELLEK = "harfoni-v7";
 
 // İlk kurulumda önbelleğe alınanlar; oyunlar internetsiz de açılabilsin.
 const DOSYALAR = [
@@ -59,8 +59,16 @@ self.addEventListener("fetch", (olay) => {
   const istek = olay.request;
   if (istek.method !== "GET" || new URL(istek.url).origin !== location.origin) return;
 
+  // "no-cache": tarayıcının HTTP önbelleğini atla, sunucuya her seferinde sor.
+  // Dosya değişmemişse sunucu kısa bir "aynı" cevabı döner, değiştiyse yenisini.
+  // Böylece güncellemeler 10 dakikalık önbellek süresini beklemeden görünür.
+  const tazeIstek =
+    istek.mode === "navigate"
+      ? fetch(istek.url, { cache: "no-cache", credentials: "same-origin" })
+      : fetch(istek, { cache: "no-cache" });
+
   olay.respondWith(
-    fetch(istek)
+    tazeIstek
       .then((yanit) => {
         if (yanit.ok) {
           const kopya = yanit.clone();
