@@ -1,11 +1,14 @@
 import { buyuk, kucuk, harfMi } from "./turkce.js";
 
-// Türkçe Q klavye düzeni.
+// Tam Türkçe Q klavye düzeni. Türkçede olmayan Q, W ve X de yerinde duruyor
+// (soluk ve basılamaz), böylece tuşlar telefon klavyesindeki yerlerinde.
+// Onay tuşu telefon klavyelerindeki gibi sağda.
 const SATIRLAR = [
-  ["e", "r", "t", "y", "u", "ı", "o", "p", "ğ", "ü"],
+  ["q", "w", "e", "r", "t", "y", "u", "ı", "o", "p", "ğ", "ü"],
   ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ş", "i"],
-  ["gir", "z", "c", "v", "b", "n", "m", "ö", "ç", "sil"],
+  ["sil", "z", "x", "c", "v", "b", "n", "m", "ö", "ç", "gir"],
 ];
+const PASIF = new Set(["q", "w", "x"]);
 
 // Bir tuş daha bilgilendirici bir renk aldıysa daha az bilgilendiricisine dönmez.
 // İki ihtimalli durumlar (Palavra'da yalan denen kareler) kesin renklerden
@@ -27,9 +30,17 @@ export function klavyeKur(kap, tusaBasildi) {
       btn.type = "button";
       btn.className = "tus";
       btn.dataset.tus = tus;
+      if (PASIF.has(tus)) {
+        btn.textContent = buyuk(tus);
+        btn.classList.add("pasif");
+        btn.disabled = true;
+        btn.setAttribute("aria-hidden", "true");
+        satirEl.appendChild(btn);
+        continue;
+      }
       if (tus === "gir") {
         btn.textContent = "GİR";
-        btn.classList.add("genis");
+        btn.classList.add("genis", "gir");
         btn.setAttribute("aria-label", "Tahmini gönder");
       } else if (tus === "sil") {
         btn.innerHTML = SIL_IKONU;

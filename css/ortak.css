@@ -238,6 +238,9 @@ button { font: inherit; color: inherit; }
   touch-action: manipulation;
 }
 .tus.genis { flex: 1.5; max-width: 66px; font-size: 0.8rem; }
+.tus.gir { background: var(--dogru); color: #fff; font-size: 0.85rem; }
+.tus.pasif { background: transparent; box-shadow: inset 0 0 0 1px var(--cizgi); color: var(--cizgi-dolu); opacity: 0.6; cursor: default; }
+.tus.pasif:active { filter: none; }
 .tus:active { filter: brightness(0.85); }
 .tus[data-durum] { color: var(--durum-yazi); }
 .tus[data-durum="dogru"] { background: var(--dogru); }
@@ -295,14 +298,19 @@ button { font: inherit; color: inherit; }
 .pencere h3 { margin: 18px 0 10px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--soluk); }
 .pencere p { line-height: 1.5; }
 
+/* Kapatma düğmesi uzun pencerelerde kaydırırken de sağ üstte kalır. */
 .kapat {
-  position: absolute;
-  top: 8px;
-  right: 10px;
+  position: sticky;
+  top: 0;
+  float: right;
+  margin: -14px -8px 0 8px;
+  z-index: 1;
   width: 36px;
   height: 36px;
   border: 0;
-  background: none;
+  border-radius: 50%;
+  background: var(--yuzey);
+  box-shadow: 0 0 0 4px var(--yuzey);
   font-size: 1.6rem;
   cursor: pointer;
   color: var(--soluk);
