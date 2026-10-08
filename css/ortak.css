@@ -673,7 +673,7 @@ input[role="switch"]:checked { background: var(--dogru); }
 input[role="switch"]:checked::after { transform: translateX(20px); }
 
 /* ---- Düello ---- */
-.duello [hidden], .geri-sayim-ortu[hidden] { display: none !important; }
+.duello [hidden], .pencere [hidden], .geri-sayim-ortu[hidden] { display: none !important; }
 .soluk-yazi { color: var(--soluk); }
 
 .duello-ekran {
