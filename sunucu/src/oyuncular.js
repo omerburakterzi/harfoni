@@ -7,13 +7,26 @@ import { DurableObject } from "cloudflare:workers";
 
 export const BASLANGIC_PUANI = 1000;
 export const MOD_ADLARI = ["hizli", "uzun"];
-const K = 32; // bir maçta kazanılıp kaybedilebilecek en fazla puan
+// Aynı iki oyuncu arasında günde en fazla bu kadar maç puana sayılır
+// (arkadaşla bilerek kaybedip puan şişirmeyi önlemek için).
+export const GUNLUK_ESLI_SINIR = 3;
+
+// K: bir maçta kazanılıp kaybedilebilecek en fazla puan. Satrançtaki (FIDE)
+// gibi yeni oyuncunun puanı hızlı yerleşir, yüksek puanlınınki az oynar.
+export function kFaktoru({ puan, mac }) {
+  if (mac < 20) return 40;
+  if (puan >= 1800) return 10;
+  return 20;
+}
 
 // Satrançtaki Elo hesabı. sonuc: 1 kazandı, 0.5 berabere, 0 kaybetti.
-export function yeniPuan(puan, rakipPuani, sonuc) {
+export function yeniPuan(puan, rakipPuani, sonuc, k) {
   const beklenen = 1 / (1 + 10 ** ((rakipPuani - puan) / 400));
-  return Math.round(puan + K * (sonuc - beklenen));
+  return Math.round(puan + k * (sonuc - beklenen));
 }
+
+// Türkiye saatine göre bugünün tarihi (ör. "2026-10-09")
+const bugun = () => new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 export class Oyuncular extends DurableObject {
   constructor(ctx, env) {
@@ -57,6 +70,14 @@ export class Oyuncular extends DurableObject {
       engellenen TEXT NOT NULL,
       zaman INTEGER NOT NULL,
       UNIQUE (engelleyen, engellenen)
+    )`);
+    // Hangi iki oyuncunun bugün kaç puanlı maç yaptığı
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS esli_mac (
+      a TEXT NOT NULL,
+      b TEXT NOT NULL,
+      gun TEXT NOT NULL,
+      sayi INTEGER NOT NULL,
+      PRIMARY KEY (a, b, gun)
     )`);
     // Kurallara uymayan oyuncu Düello'dan uzaklaştırılabilir.
     const sutunlar = this.sql.exec("PRAGMA table_info(oyuncu)").toArray().map((s) => s.name);
@@ -111,6 +132,7 @@ export class Oyuncular extends DurableObject {
     if (!this.dogrula(id, anahtar)) return false;
     this.sql.exec("DELETE FROM derece WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM engel WHERE engelleyen = ? OR engellenen = ?", id, id);
+    this.sql.exec("DELETE FROM esli_mac WHERE a = ? OR b = ?", id, id);
     this.sql.exec("DELETE FROM sikayet WHERE sikayetci = ? OR hedef = ?", id, id);
     this.sql.exec("DELETE FROM oyuncu WHERE id = ?", id);
     return true;
@@ -118,12 +140,24 @@ export class Oyuncular extends DurableObject {
 
   // Maç bitince iki oyuncunun o moddaki puanını birlikte günceller.
   // sonucA: A oyuncusu için 1 / 0.5 / 0. Silinmiş oyuncu varsa puan değişmez.
+  // Aynı ikili bugün sınırı doldurduysa { sinir: true } döner, puan değişmez.
   macSonucu(aId, bId, sonucA, mod) {
     if (!this.#bul(aId) || !this.#bul(bId) || !MOD_ADLARI.includes(mod)) return null;
+    const [ilk, ikinci] = [aId, bId].sort();
+    const gun = bugun();
+    const bugunku = this.sql.exec("SELECT sayi FROM esli_mac WHERE a = ? AND b = ? AND gun = ?", ilk, ikinci, gun).toArray()[0]?.sayi || 0;
+    if (bugunku >= GUNLUK_ESLI_SINIR) return { sinir: true };
+    this.sql.exec(
+      `INSERT INTO esli_mac (a, b, gun, sayi) VALUES (?, ?, ?, 1)
+       ON CONFLICT (a, b, gun) DO UPDATE SET sayi = sayi + 1`,
+      ilk, ikinci, gun
+    );
+    this.sql.exec("DELETE FROM esli_mac WHERE gun < ?", gun); // eski günler gereksiz
+
     const a = this.#derece(aId, mod);
     const b = this.#derece(bId, mod);
-    const yeniA = yeniPuan(a.puan, b.puan, sonucA);
-    const yeniB = yeniPuan(b.puan, a.puan, 1 - sonucA);
+    const yeniA = yeniPuan(a.puan, b.puan, sonucA, kFaktoru(a));
+    const yeniB = yeniPuan(b.puan, a.puan, 1 - sonucA, kFaktoru(b));
     const guncelle = (id, yeni, sonuc) =>
       this.sql.exec(
         `INSERT INTO derece (oyuncu, mod, puan, mac, galibiyet, beraberlik) VALUES (?, ?, ?, 1, ?, ?)

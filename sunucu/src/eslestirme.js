@@ -59,7 +59,7 @@ export class Eslestirme extends DurableObject {
     ws.serializeAttachment({ ...ben, eslesti: true });
     rakipWs.serializeAttachment({ ...rakip, eslesti: true });
 
-    const kod = await odaAc(this.env, ben.mod, true);
+    const kod = await odaAc(this.env, { mod: ben.mod, eslesme: true });
     for (const soket of [ws, rakipWs]) {
       try {
         if (kod) soket.send(JSON.stringify({ t: "bulundu", kod }));

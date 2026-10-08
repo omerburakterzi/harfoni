@@ -83,6 +83,10 @@
       </div>
       <button id="rakip-bul" class="ana-dugme" type="button">Rakip bul</button>
       <button id="davet-et" class="duz-dugme cerceveli" type="button">Arkadaşını davet et</button>
+      <label class="puanli-secimi">
+        <input id="puanli-davet" type="checkbox" role="switch" checked>
+        <span>Arkadaş maçı puana sayılsın</span>
+      </label>
       <div class="bot-secimi">
         <span>🤖 Bota karşı oyna <small>(puana sayılmaz)</small></span>
         <div>
@@ -169,7 +173,9 @@
     <h3>İki mod</h3>
     <p><strong>Hızlı:</strong> 3 dakikayla başlarsın. Her tahmin saatine <strong>+30 sn</strong> ekler. İlk kez yeşil olan her kare <strong>+15 sn</strong>, ilk kez bulduğun her turuncu harf <strong>+10 sn</strong> daha kazandırır.</p>
     <p><strong>Uzun:</strong> 10 dakika, ek süre yok. Acele etmeden düşünmek isteyenler için.</p>
-    <p class="not">Herkes her modda 1000 puanla başlar. Kazanınca puanın artar, kaybedince azalır. Senden güçlü birini yenmek daha çok puan kazandırır.</p>
+    <h3>Puan</h3>
+    <p>Satrançtaki gibi <strong>Elo</strong> puanı: herkes her modda 1000 puanla başlar. Kazanınca puanın artar, kaybedince azalır. Senden güçlü birini yenmek daha çok, zayıf birine kaybetmek daha çok puan oynatır. İlk 20 maçında puanın daha hızlı değişir ki seviyeni çabuk bulasın.</p>
+    <p class="not">Arkadaşınla puansız da oynayabilirsin. Bot maçları puana sayılmaz. Aynı kişiyle günde en fazla 3 maç puana sayılır.</p>
   </dialog>
 
   <dialog id="sonuc-penceresi" class="pencere">

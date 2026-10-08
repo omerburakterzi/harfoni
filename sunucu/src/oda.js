@@ -66,9 +66,20 @@ export class DuelloOdasi extends DurableObject {
 
   // Oda kodu alındığında bir kez çağrılır.
   // bot: "kolay" | "orta" | "zor" verilirse rakip Harfoni Bot olur.
-  async kur(kod, mod, eslesme = false, bot = null) {
+  // puansiz: maç sonunda puanlar değişmez.
+  async kur(kod, { mod, eslesme = false, bot = null, puansiz = false } = {}) {
     if (this.oda) return false;
-    this.oda = { kod, mod: MODLAR[mod] ? mod : "hizli", eslesme, durum: "bekliyor", oyuncular: [], tahminler: {}, rovans: [], sonuc: null };
+    this.oda = {
+      kod,
+      mod: MODLAR[mod] ? mod : "hizli",
+      eslesme,
+      puansiz: puansiz && !eslesme, // rastgele eşleşmeler her zaman puanlı
+      durum: "bekliyor",
+      oyuncular: [],
+      tahminler: {},
+      rovans: [],
+      sonuc: null,
+    };
     if (BOT_SEVIYELERI[bot]) {
       this.oda.bot = bot;
       this.oda.oyuncular.push({ id: BOT_ID, ad: `Harfoni Bot · ${BOT_SEVIYELERI[bot].ad}`, puan: null });
@@ -265,10 +276,17 @@ export class DuelloOdasi extends DurableObject {
     for (const o of oda.oyuncular) if (oda.durdu[o.id] == null) oda.durdu[o.id] = Math.min(simdi, oda.bitis[o.id]);
     const [a, b] = oda.oyuncular;
     const sonucA = kazanan === null ? 0.5 : kazanan === a.id ? 1 : 0;
-    // Bot maçları puana sayılmaz.
-    const puanlar = oda.bot ? null : await this.#oyuncular().macSonucu(a.id, b.id, sonucA, oda.mod);
+    // Bot ve puansız maçlar puana sayılmaz. Aynı ikili günlük sınırı
+    // doldurduysa da sayılmaz.
+    let puanlar = null;
+    let puansizSebep = oda.bot ? "bot" : oda.puansiz ? "puansiz" : null;
+    if (!puansizSebep) {
+      const sonuc = await this.#oyuncular().macSonucu(a.id, b.id, sonucA, oda.mod);
+      if (sonuc?.sinir) puansizSebep = "sinir";
+      else puanlar = sonuc;
+    }
     if (puanlar) for (const o of oda.oyuncular) o.puan = puanlar[o.id].yeni;
-    oda.sonuc = { kazanan, puanlar };
+    oda.sonuc = { kazanan, puanlar, puansizSebep };
     await this.#kaydet();
     await this.ctx.storage.setAlarm(Date.now() + TEMIZLIK);
     this.#yayinla();
@@ -363,6 +381,7 @@ export class DuelloOdasi extends DurableObject {
       kod: oda.kod,
       mod: oda.mod,
       eslesme: Boolean(oda.eslesme),
+      puansiz: Boolean(oda.puansiz || oda.bot),
       durum: oda.durum,
       simdi: Date.now(),
       baslangic: oda.baslangic,
@@ -376,6 +395,7 @@ export class DuelloOdasi extends DurableObject {
         rakipSure: rakip && oda.bulma[rakip.id] ? oda.bulma[rakip.id] - oda.baslangic : null,
         kazanan: oda.sonuc.kazanan === null ? null : oda.sonuc.kazanan === id ? "ben" : "rakip",
         puan: oda.sonuc.puanlar && oda.sonuc.puanlar[id],
+        puansizSebep: oda.sonuc.puansizSebep || null,
       },
       rovans: { ben: oda.rovans.includes(id), rakip: Boolean(rakip && oda.rovans.includes(rakip.id)) },
       engelli: Boolean(oda.engelli),

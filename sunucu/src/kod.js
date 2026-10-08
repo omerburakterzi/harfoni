@@ -6,13 +6,15 @@ function kodUret() {
   return [...sayilar].map((s) => KOD_HARFLERI[s % KOD_HARFLERI.length]).join("");
 }
 
-// Boş bir kod bulup odayı kurar. eslesme: rastgele eşleşen iki oyuncu için mi.
-// bot: bota karşı oyunsa seviyesi.
-export async function odaAc(env, mod, eslesme = false, bot = null) {
+// Boş bir kod bulup odayı kurar. ayarlar: { mod, eslesme, bot, puansiz }
+//   eslesme: rastgele eşleşen iki oyuncu için mi
+//   bot: bota karşı oyunsa seviyesi
+//   puansiz: arkadaş maçı puana sayılmasın
+export async function odaAc(env, ayarlar) {
   for (let deneme = 0; deneme < 5; deneme++) {
     const kod = kodUret();
     const oda = env.ODALAR.get(env.ODALAR.idFromName(kod));
-    if (await oda.kur(kod, mod, eslesme, bot)) return kod;
+    if (await oda.kur(kod, ayarlar)) return kod;
   }
   return null;
 }

@@ -121,7 +121,7 @@ async function davetEt(dugme) {
   aramayiBitir();
   dugme.disabled = true;
   try {
-    const { kod } = await istek("/duello", { mod: secilenMod });
+    const { kod } = await istek("/duello", { mod: secilenMod, puansiz: !$("puanli-davet").checked });
     odaKodu = kod;
     const k = YEREL && parametreler.get("k") ? `&k=${parametreler.get("k")}` : "";
     history.replaceState(null, "", `?oda=${kod}${k}`);
@@ -339,7 +339,7 @@ function ciz(d) {
     ekranGoster("bekleme");
     $("alt-baslik").textContent = "";
     $("oda-kodu").textContent = d.kod;
-    $("bekleme-mod").textContent = `${MODLAR[d.mod].ad} mod · ${MODLAR[d.mod].aciklama}`;
+    $("bekleme-mod").textContent = `${MODLAR[d.mod].ad} mod · ${MODLAR[d.mod].aciklama}${d.puansiz ? " · puansız" : ""}`;
     $("bekleme-baslik").textContent = d.eslesme ? "Rakip bulundu, bağlanıyor…" : "Rakibini bekliyorsun";
     $("davet-alani").hidden = d.eslesme;
     $("vazgec").hidden = d.eslesme;
@@ -349,7 +349,7 @@ function ciz(d) {
 
   if (oyunAnahtari !== d.baslangic) yeniOyun(d);
   ekranGoster("oyun");
-  $("alt-baslik").textContent = `${MODLAR[d.mod].ad} · ${MODLAR[d.mod].aciklama}`;
+  $("alt-baslik").textContent = `${MODLAR[d.mod].ad} · ${MODLAR[d.mod].aciklama}${d.puansiz && !d.rakip.bot ? " · puansız" : ""}`;
 
   // Hızlı modda tahmin sonrası saate eklenen süre
   if (oncekiBitis !== null && d.ben.bitis > oncekiBitis) bonusGoster(d.ben.bitis - oncekiBitis);
@@ -544,7 +544,12 @@ function sonucuDoldur(d) {
     const fark = puan.yeni - puan.eski;
     degisim.innerHTML = `${MODLAR[d.mod].ad} puanın: ${puan.eski} → <strong>${puan.yeni}</strong> <span class="${fark >= 0 ? "artti" : "azaldi"}">(${fark >= 0 ? "+" : ""}${fark})</span>`;
   } else {
-    degisim.textContent = d.rakip.bot ? "Bot maçı, puanına sayılmadı." : "";
+    degisim.textContent =
+      {
+        bot: "Bot maçı, puanına sayılmadı.",
+        puansiz: "Puansız maç, puanın değişmedi.",
+        sinir: "Bugün bu rakiple 3 puanlı maç yaptınız; bu maç puana sayılmadı.",
+      }[d.sonuc.puansizSebep] || "";
   }
   $("sonuc-rakip-menu").hidden = d.rakip.bot;
 
@@ -697,6 +702,8 @@ async function basla() {
     dugme.addEventListener("click", () => modSec(dugme.dataset.mod));
   }
   modSec(MODLAR[secilenMod] ? secilenMod : "hizli");
+  $("puanli-davet").checked = oku("duello.puanli-davet", true);
+  $("puanli-davet").addEventListener("change", () => yaz("duello.puanli-davet", $("puanli-davet").checked));
   $("rakip-bul").addEventListener("click", rakipAra);
   $("davet-et").addEventListener("click", () => davetEt($("davet-et")));
   $("aramadan-davet").addEventListener("click", () => davetEt($("aramadan-davet")));

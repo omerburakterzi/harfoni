@@ -3,7 +3,7 @@
 //   POST /oyuncu          { id, anahtar, ad }  kaydol ya da adını güncelle
 //   POST /oyuncu/bilgi    { id, anahtar }      puanını ve maç sayılarını al
 //   POST /oyuncu/sil      { id, anahtar }      tüm bilgilerini sil
-//   POST /duello          { mod, bot? }        yeni oda aç (hizli | uzun; bot: kolay | orta | zor)
+//   POST /duello          { mod, bot?, puansiz? }  yeni oda aç (hizli | uzun; bot: kolay | orta | zor)
 //   GET  /duello/KOD      (WebSocket)          odaya bağlan
 //   GET  /eslestir        (WebSocket)          rastgele rakip ara
 //   POST /oyuncu/engeller { id, anahtar }      engellediğin kişiler
@@ -113,8 +113,8 @@ export default {
     if (istek.method !== "POST") return cevap({ ad: "Harfoni sunucusu" }, kaynak);
 
     if (url.pathname === "/duello") {
-      const { mod, bot } = await istek.json().catch(() => ({}));
-      const kod = await odaAc(env, mod, false, bot);
+      const { mod, bot, puansiz } = await istek.json().catch(() => ({}));
+      const kod = await odaAc(env, { mod, bot, puansiz: Boolean(puansiz) });
       return kod ? cevap({ kod }, kaynak) : cevap({ hata: "Oda açılamadı, tekrar dene" }, kaynak, 500);
     }
 
