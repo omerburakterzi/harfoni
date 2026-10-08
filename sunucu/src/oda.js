@@ -14,6 +14,7 @@ import { CEVAPLAR, GECERLI } from "../../js/kelimeler.js";
 import { degerlendir } from "../../js/ortak/degerlendir.js";
 import { anahtarOzeti } from "./ozet.js";
 import { bildirimGonder } from "./eposta.js";
+import { BOT_ID, BOT_SEVIYELERI, botTahmini, botGecikmesi } from "./bot.js";
 
 export const HAK = 6;
 export const MODLAR = {
@@ -64,9 +65,15 @@ export class DuelloOdasi extends DurableObject {
   }
 
   // Oda kodu alındığında bir kez çağrılır.
-  async kur(kod, mod, eslesme = false) {
+  // bot: "kolay" | "orta" | "zor" verilirse rakip Harfoni Bot olur.
+  async kur(kod, mod, eslesme = false, bot = null) {
     if (this.oda) return false;
     this.oda = { kod, mod: MODLAR[mod] ? mod : "hizli", eslesme, durum: "bekliyor", oyuncular: [], tahminler: {}, rovans: [], sonuc: null };
+    if (BOT_SEVIYELERI[bot]) {
+      this.oda.bot = bot;
+      this.oda.oyuncular.push({ id: BOT_ID, ad: `Harfoni Bot · ${BOT_SEVIYELERI[bot].ad}`, puan: null });
+      this.oda.tahminler[BOT_ID] = [];
+    }
     await this.#kaydet();
     await this.ctx.storage.setAlarm(Date.now() + (eslesme ? ESLESME_BEKLEME : TEMIZLIK));
     return true;
@@ -146,6 +153,7 @@ export class DuelloOdasi extends DurableObject {
     oda.bulma = {}; // oyuncu kimliği -> kelimeyi bulduğu an
     oda.bitis = {}; // oyuncu kimliği -> saatinin biteceği an (bonuslarla uzar)
     oda.durdu = {}; // oyuncu kimliği -> oynamayı bitirdiği an (buldu, hakkı ya da süresi bitti)
+    if (oda.bot) oda.botSiradaki = oda.baslangic + 3000 + Math.random() * 6000;
     for (const o of oda.oyuncular) {
       oda.tahminler[o.id] = [];
       // TEST_SURE sadece yerel denemede (.dev.vars) kullanılır.
@@ -159,6 +167,7 @@ export class DuelloOdasi extends DurableObject {
   async #alarmKur() {
     const oda = this.oda;
     const bekleyenler = oda.oyuncular.filter((o) => oda.durdu[o.id] == null).map((o) => oda.bitis[o.id]);
+    if (oda.bot && oda.durdu[BOT_ID] == null) bekleyenler.push(oda.botSiradaki);
     if (bekleyenler.length) await this.ctx.storage.setAlarm(Math.min(...bekleyenler));
   }
 
@@ -190,6 +199,16 @@ export class DuelloOdasi extends DurableObject {
     if ([...kelime].length !== 5) return this.#hata(ws, "Harf sayısı yetersiz");
     if (!GECERLI.has(kelime)) return this.#hata(ws, "Sözlükte yok");
 
+    this.#tahminiIsle(id, kelime, simdi);
+    if (this.#sonucBelli()) return this.#bitir();
+    await this.#kaydet();
+    await this.#alarmKur();
+    this.#yayinla();
+  }
+
+  // Geçerli bir tahmini kaydeder: süre bonusu, bulma ve bitirme.
+  #tahminiIsle(id, kelime, simdi) {
+    const oda = this.oda;
     const oncekiler = oda.tahminler[id];
     if (MODLAR[oda.mod].bonus) {
       const { yesil, turuncu } = yeniBilgi(oncekiler, kelime, oda.cevap);
@@ -198,11 +217,12 @@ export class DuelloOdasi extends DurableObject {
     oncekiler.push(kelime);
     if (kelime === oda.cevap) oda.bulma[id] = simdi;
     if (kelime === oda.cevap || oncekiler.length >= HAK) oda.durdu[id] = simdi;
+  }
 
-    if (this.#sonucBelli()) return this.#bitir();
-    await this.#kaydet();
-    await this.#alarmKur();
-    this.#yayinla();
+  #botOyna(simdi) {
+    const oda = this.oda;
+    this.#tahminiIsle(BOT_ID, botTahmini(oda.tahminler[BOT_ID], oda.cevap, oda.bot), simdi);
+    oda.botSiradaki = simdi + botGecikmesi(oda.bot);
   }
 
   // Bulan oyuncunun tahmin sayısı (bulamadıysa null).
@@ -245,7 +265,8 @@ export class DuelloOdasi extends DurableObject {
     for (const o of oda.oyuncular) if (oda.durdu[o.id] == null) oda.durdu[o.id] = Math.min(simdi, oda.bitis[o.id]);
     const [a, b] = oda.oyuncular;
     const sonucA = kazanan === null ? 0.5 : kazanan === a.id ? 1 : 0;
-    const puanlar = await this.#oyuncular().macSonucu(a.id, b.id, sonucA, oda.mod);
+    // Bot maçları puana sayılmaz.
+    const puanlar = oda.bot ? null : await this.#oyuncular().macSonucu(a.id, b.id, sonucA, oda.mod);
     if (puanlar) for (const o of oda.oyuncular) o.puan = puanlar[o.id].yeni;
     oda.sonuc = { kazanan, puanlar };
     await this.#kaydet();
@@ -257,6 +278,7 @@ export class DuelloOdasi extends DurableObject {
     const oda = this.oda;
     if (oda.durum !== "bitti" || oda.rovans.includes(id) || oda.engelli) return;
     oda.rovans.push(id);
+    if (oda.bot) oda.rovans.push(BOT_ID); // bot her zaman rövanşa hazır
     if (oda.rovans.length === 2) await this.#baslat();
     else await this.#kaydet();
     this.#yayinla();
@@ -268,7 +290,7 @@ export class DuelloOdasi extends DurableObject {
 
   async #sikayet(ws, id, sebep) {
     const rakip = this.#rakibi(id);
-    if (!rakip || !SIKAYET_SEBEPLERI[sebep]) return;
+    if (!rakip || rakip.id === BOT_ID || !SIKAYET_SEBEPLERI[sebep]) return;
     const sonuc = await this.#oyuncular().sikayetEt(id, rakip.id, sebep, this.oda.kod);
     ws.send(JSON.stringify({ t: "bilgi", mesaj: "Şikâyetin alındı, teşekkürler. İnceleyeceğiz." }));
     if (sonuc?.yeni) {
@@ -284,7 +306,7 @@ export class DuelloOdasi extends DurableObject {
 
   async #engelle(ws, id) {
     const rakip = this.#rakibi(id);
-    if (!rakip) return;
+    if (!rakip || rakip.id === BOT_ID) return;
     await this.#oyuncular().engelle(id, rakip.id);
     this.oda.engelli = true; // bu iki kişi rövanş yapamaz
     await this.#kaydet();
@@ -296,7 +318,9 @@ export class DuelloOdasi extends DurableObject {
     const oda = this.oda;
     if (!oda) return;
     if (oda.durum === "oyun") {
-      this.#saatleriKontrolEt(Date.now());
+      const simdi = Date.now();
+      this.#saatleriKontrolEt(simdi);
+      if (oda.bot && oda.durdu[BOT_ID] == null && simdi >= oda.botSiradaki - 50) this.#botOyna(simdi);
       if (this.#sonucBelli()) return this.#bitir();
       await this.#kaydet();
       await this.#alarmKur();
@@ -320,6 +344,7 @@ export class DuelloOdasi extends DurableObject {
   #gorunum(id, bagliOlanlar) {
     const oda = this.oda;
     const ben = oda.oyuncular.find((o) => o.id === id);
+    if (!ben) return null;
     const rakip = oda.oyuncular.find((o) => o.id !== id);
     const bitti = oda.durum === "bitti";
     const oyuncu = (o, harflerle) => ({
@@ -343,7 +368,7 @@ export class DuelloOdasi extends DurableObject {
       baslangic: oda.baslangic,
       hak: HAK,
       ben: oyuncu(ben, true),
-      rakip: rakip && { ...oyuncu(rakip, bitti), bagli: bagliOlanlar.has(rakip.id) },
+      rakip: rakip && { ...oyuncu(rakip, bitti), bagli: bagliOlanlar.has(rakip.id) || rakip.id === BOT_ID, bot: rakip.id === BOT_ID },
       sonuc: bitti && {
         cevap: oda.cevap,
         // kelimeyi buldukları süre (ms); bulamayan için null
@@ -365,7 +390,8 @@ export class DuelloOdasi extends DurableObject {
       const id = ws.deserializeAttachment()?.id;
       if (!id) continue;
       try {
-        ws.send(JSON.stringify(this.#gorunum(id, bagliOlanlar)));
+        const gorunum = this.#gorunum(id, bagliOlanlar);
+        if (gorunum) ws.send(JSON.stringify(gorunum));
       } catch {
         // bağlantı tam o sırada kopmuş olabilir
       }

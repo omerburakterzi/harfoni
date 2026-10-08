@@ -193,6 +193,22 @@ function aramaSaatiniGuncelle() {
 }
 setInterval(aramaSaatiniGuncelle, 500);
 
+async function botlaOyna(seviye, dugme) {
+  aramayiBitir();
+  dugme.disabled = true;
+  try {
+    const { kod } = await istek("/duello", { mod: secilenMod, bot: seviye });
+    odaKodu = kod;
+    const k = YEREL && parametreler.get("k") ? `&k=${parametreler.get("k")}` : "";
+    history.replaceState(null, "", `?oda=${kod}${k}`);
+    baglan();
+  } catch (hata) {
+    bildir(hata.message, 2500);
+  } finally {
+    dugme.disabled = false;
+  }
+}
+
 function davetAdresi() {
   return `${DUELLO_ADRESI}?oda=${odaKodu}`;
 }
@@ -341,7 +357,8 @@ function ciz(d) {
 
   // Rakip
   $("rakip-ad").textContent = d.rakip.ad;
-  $("rakip-puan").textContent = `${d.rakip.puan} puan`;
+  $("rakip-puan").textContent = d.rakip.bot ? "puana sayılmaz" : `${d.rakip.puan} puan`;
+  $("rakip-menu").hidden = d.rakip.bot;
   $("rakip-bagli").classList.toggle("bagli", d.rakip.bagli);
   $("rakip-bagli").title = d.rakip.bagli ? "Bağlı" : "Bağlantısı koptu";
   const miniSatirlar = $("rakip-tahta").children;
@@ -527,8 +544,9 @@ function sonucuDoldur(d) {
     const fark = puan.yeni - puan.eski;
     degisim.innerHTML = `${MODLAR[d.mod].ad} puanın: ${puan.eski} → <strong>${puan.yeni}</strong> <span class="${fark >= 0 ? "artti" : "azaldi"}">(${fark >= 0 ? "+" : ""}${fark})</span>`;
   } else {
-    degisim.textContent = "";
+    degisim.textContent = d.rakip.bot ? "Bot maçı, puanına sayılmadı." : "";
   }
+  $("sonuc-rakip-menu").hidden = d.rakip.bot;
 
   const kap = $("rakip-sonuc");
   kap.innerHTML = "";
@@ -682,6 +700,9 @@ async function basla() {
   $("rakip-bul").addEventListener("click", rakipAra);
   $("davet-et").addEventListener("click", () => davetEt($("davet-et")));
   $("aramadan-davet").addEventListener("click", () => davetEt($("aramadan-davet")));
+  for (const dugme of document.querySelectorAll("[data-bot]")) {
+    dugme.addEventListener("click", () => botlaOyna(dugme.dataset.bot, dugme));
+  }
   $("arama-iptal").addEventListener("click", () => lobiyeDon());
   $("davet-paylas").addEventListener("click", davetiPaylas);
   $("vazgec").addEventListener("click", () => lobiyeDon());

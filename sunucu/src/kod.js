@@ -7,11 +7,12 @@ function kodUret() {
 }
 
 // Boş bir kod bulup odayı kurar. eslesme: rastgele eşleşen iki oyuncu için mi.
-export async function odaAc(env, mod, eslesme = false) {
+// bot: bota karşı oyunsa seviyesi.
+export async function odaAc(env, mod, eslesme = false, bot = null) {
   for (let deneme = 0; deneme < 5; deneme++) {
     const kod = kodUret();
     const oda = env.ODALAR.get(env.ODALAR.idFromName(kod));
-    if (await oda.kur(kod, mod, eslesme)) return kod;
+    if (await oda.kur(kod, mod, eslesme, bot)) return kod;
   }
   return null;
 }

@@ -873,3 +873,19 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
 .engel-satiri .duz-dugme { margin: 0; padding: 6px 12px; font-size: 0.85rem; }
 .yasak-uyarisi { padding: 12px; border-radius: var(--yaricap); background: var(--kirmizi); color: #fff; }
 .yasak-uyarisi a { color: #fff; }
+.bot-secimi { display: grid; gap: 8px; justify-items: center; margin-top: 18px; font-size: 0.9rem; color: var(--soluk); }
+.bot-secimi small { font-size: 0.78rem; }
+.bot-secimi > div { display: flex; gap: 8px; }
+.bot-dugmesi {
+  padding: 7px 16px;
+  border: 1px solid var(--cizgi);
+  border-radius: 999px;
+  background: var(--yuzey);
+  color: var(--yazi);
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.bot-dugmesi:hover { border-color: var(--dogru); }
+.bot-dugmesi:disabled { opacity: 0.5; }
+.arama-oneri .bot-secimi { margin-top: 14px; }
