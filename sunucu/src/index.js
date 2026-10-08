@@ -6,9 +6,13 @@
 //   POST /duello          { mod }              yeni oda aç (hizli | uzun), kodunu al
 //   GET  /duello/KOD      (WebSocket)          odaya bağlan
 //   GET  /eslestir        (WebSocket)          rastgele rakip ara
+//   POST /oyuncu/engeller { id, anahtar }      engellediğin kişiler
+//   POST /oyuncu/engel-kaldir { id, anahtar, no }
+//   GET  /yonetim                              şikâyetleri inceleme sayfası
 
 import { anahtarOzeti } from "./ozet.js";
 import { odaAc } from "./kod.js";
+import { YONETIM_SAYFASI, yetkiliMi } from "./yonetim.js";
 
 export { DuelloOdasi } from "./oda.js";
 export { Oyuncular } from "./oyuncular.js";
@@ -89,6 +93,23 @@ export default {
       return env.ESLESTIRME.get(env.ESLESTIRME.idFromName("tum")).fetch(istek);
     }
 
+    if (url.pathname === "/yonetim" && istek.method === "GET") {
+      return new Response(YONETIM_SAYFASI, { headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" } });
+    }
+    if (url.pathname.startsWith("/yonetim/") && istek.method === "POST") {
+      if (!yetkiliMi(istek, env)) return new Response(JSON.stringify({ hata: "Yetkisiz" }), { status: 401 });
+      if (url.pathname === "/yonetim/liste") return Response.json(await oyuncular.yonetimListesi());
+      if (url.pathname === "/yonetim/islem") {
+        const { islem, hedef } = await istek.json();
+        if (islem === "ad-sifirla") await oyuncular.adSifirla(hedef);
+        else if (islem === "yasakla") await oyuncular.yasakla(hedef, true);
+        else if (islem === "yasak-kaldir") await oyuncular.yasakla(hedef, false);
+        else if (islem === "kapat") await oyuncular.sikayetleriKapat(hedef);
+        else return Response.json({ hata: "Bilinmeyen işlem" }, { status: 400 });
+        return Response.json({ tamam: true });
+      }
+    }
+
     if (istek.method !== "POST") return cevap({ ad: "Harfoni sunucusu" }, kaynak);
 
     if (url.pathname === "/duello") {
@@ -117,6 +138,13 @@ export default {
     if (url.pathname === "/oyuncu/bilgi") {
       const oyuncu = await oyuncular.dogrula(id, ozet);
       return oyuncu ? cevap(oyuncu, kaynak) : cevap({ hata: "Oyuncu bulunamadı" }, kaynak, 404);
+    }
+    if (url.pathname === "/oyuncu/engeller") {
+      const liste = await oyuncular.engeller(id, ozet);
+      return liste ? cevap(liste, kaynak) : cevap({ hata: "Oyuncu bulunamadı" }, kaynak, 404);
+    }
+    if (url.pathname === "/oyuncu/engel-kaldir") {
+      return cevap({ tamam: await oyuncular.engelKaldir(id, ozet, Number(govde.no)) }, kaynak);
     }
     if (url.pathname === "/oyuncu/sil") {
       return cevap({ silindi: await oyuncular.sil(id, ozet) }, kaynak);

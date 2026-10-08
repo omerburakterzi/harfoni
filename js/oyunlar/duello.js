@@ -66,6 +66,9 @@ function kimlikAl() {
 function profiliGoster() {
   $("profil-ac").hidden = !profil;
   if (!profil) return;
+  $("yasak-uyarisi").hidden = !profil.yasakli;
+  $("rakip-bul").disabled = profil.yasakli;
+  $("davet-et").disabled = profil.yasakli;
   $("lobi-ad").textContent = profil.ad;
   for (const mod of Object.keys(MODLAR)) {
     const p = profil.puanlar[mod];
@@ -280,6 +283,7 @@ function mesajIsle(mesaj) {
     }
     return bildir(mesaj.mesaj);
   }
+  if (mesaj.t === "bilgi") return bildir(mesaj.mesaj, 3000);
   if (mesaj.t === "durum") ciz(mesaj);
 }
 
@@ -544,9 +548,9 @@ function sonucuDoldur(d) {
 
   const rovans = $("rovans");
   const rovansDurumu = $("rovans-durumu");
-  rovans.disabled = d.rovans.ben || !d.rakip.bagli;
+  rovans.disabled = d.rovans.ben || !d.rakip.bagli || d.engelli;
   rovans.textContent = d.rovans.ben ? "Rakip bekleniyor…" : "Rövanş";
-  rovansDurumu.hidden = !(d.rovans.rakip || !d.rakip.bagli);
+  rovansDurumu.hidden = !(d.rovans.rakip || !d.rakip.bagli) || d.engelli;
   rovansDurumu.textContent = !d.rakip.bagli ? `${d.rakip.ad} oyundan ayrıldı.` : `${d.rakip.ad} rövanş istiyor!`;
 }
 
@@ -577,6 +581,44 @@ function sonucMetni() {
   return `Harfoni Düello ⚔️ ${MODLAR[d.mod].ad}\n${baslik}\n\n${satirlar.join("\n")}\n\nSen de meydan oku: ${DUELLO_ADRESI}`;
 }
 
+// ---------- Şikâyet ve engelleme ----------
+
+function rakipMenusunuAc() {
+  if (!durum?.rakip) return;
+  $("rakip-pencere-ad").textContent = durum.rakip.ad;
+  $("engelle").disabled = durum.engelli;
+  $("engelle").textContent = durum.engelli ? "Engellendi" : "Engelle";
+  for (const dugme of document.querySelectorAll("[data-sebep]")) dugme.disabled = false;
+  pencereAc("rakip-penceresi");
+}
+
+async function engelleriGoster() {
+  const kap = $("engel-listesi");
+  let liste;
+  try {
+    liste = await istek("/oyuncu/engeller", kimlik);
+  } catch {
+    return;
+  }
+  kap.innerHTML = liste.length ? "" : `<p class="soluk-yazi">Kimseyi engellemedin.</p>`;
+  for (const kisi of liste) {
+    const satir = document.createElement("div");
+    satir.className = "engel-satiri";
+    const ad = document.createElement("span");
+    ad.textContent = kisi.ad;
+    const dugme = document.createElement("button");
+    dugme.className = "duz-dugme";
+    dugme.type = "button";
+    dugme.textContent = "Engeli kaldır";
+    dugme.addEventListener("click", async () => {
+      await istek("/oyuncu/engel-kaldir", { ...kimlik, no: kisi.no }).catch(() => {});
+      engelleriGoster();
+    });
+    satir.append(ad, dugme);
+    kap.appendChild(satir);
+  }
+}
+
 // ---------- Başlangıç ----------
 
 async function basla() {
@@ -603,8 +645,22 @@ async function basla() {
       bildir(hata.message, 3000);
     }
   });
+  $("rakip-menu").addEventListener("click", rakipMenusunuAc);
+  $("sonuc-rakip-menu").addEventListener("click", rakipMenusunuAc);
+  for (const dugme of document.querySelectorAll("[data-sebep]")) {
+    dugme.addEventListener("click", () => {
+      if (!gonder({ t: "sikayet", sebep: dugme.dataset.sebep })) return;
+      for (const d of document.querySelectorAll("[data-sebep]")) d.disabled = true;
+      $("rakip-penceresi").close();
+    });
+  }
+  $("engelle").addEventListener("click", () => {
+    if (!confirm(`${durum.rakip.ad} engellensin mi? Bir daha eşleşmeyeceksiniz.`)) return;
+    if (gonder({ t: "engelle" })) $("rakip-penceresi").close();
+  });
   $("profil-ac").addEventListener("click", () => {
     profilYenile();
+    engelleriGoster();
     pencereAc("profil-penceresi");
   });
   $("profil-sil").addEventListener("click", async () => {

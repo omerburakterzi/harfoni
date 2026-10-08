@@ -17,6 +17,8 @@
     { "tag": "v1", "new_sqlite_classes": ["DuelloOdasi", "Oyuncular"] },
     { "tag": "v2", "new_sqlite_classes": ["Eslestirme"] }
   ],
+  // Şikâyet bildirimleri (alıcı adres gizli ayar: BILDIRIM_ADRESI)
+  "send_email": [{ "name": "EPOSTA" }],
   "observability": { "enabled": false },
   "send_metrics": false
 }

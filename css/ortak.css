@@ -862,3 +862,14 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
   100% { opacity: 0; transform: translate(-50%, -4px); }
 }
 #profil-penceresi h3:first-of-type { margin-top: 4px; }
+.kucuk-ikon { flex: none; width: 28px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--soluk); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.kucuk-ikon:hover { background: var(--yumusak); }
+.soluk-dugme { color: var(--soluk); font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
+.sikayet-sebepleri { display: grid; gap: 8px; }
+.sikayet-sebepleri .duz-dugme, #engelle { margin: 0; max-width: none; }
+.pencere .aciklama { margin: 0 0 10px; font-size: 0.88rem; color: var(--soluk); }
+.engel-listesi { display: grid; gap: 4px; }
+.engel-satiri { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.engel-satiri .duz-dugme { margin: 0; padding: 6px 12px; font-size: 0.85rem; }
+.yasak-uyarisi { padding: 12px; border-radius: var(--yaricap); background: var(--kirmizi); color: #fff; }
+.yasak-uyarisi a { color: #fff; }

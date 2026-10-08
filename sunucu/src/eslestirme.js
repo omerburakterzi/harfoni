@@ -28,12 +28,14 @@ export class Eslestirme extends DurableObject {
     const oyuncular = this.env.OYUNCULAR.get(this.env.OYUNCULAR.idFromName("tum"));
     const oyuncu = await oyuncular.dogrula(id, await anahtarOzeti(anahtar));
     if (!oyuncu) return ws.close(4002, "Kimlik doğrulanamadı");
+    if (oyuncu.yasakli) return ws.close(4002, "Kurallara uymadığın için Düello'dan uzaklaştırıldın");
+    const engelliler = await oyuncular.engelliler(id);
 
     // Aynı oyuncu iki sekmeden arıyorsa eskisini kapat.
     for (const eski of this.ctx.getWebSockets()) {
       if (eski !== ws && eski.deserializeAttachment()?.id === id) eski.close(4000, "Başka yerden aranıyor");
     }
-    ws.serializeAttachment({ id, mod, puan: oyuncu.puanlar[mod].puan, zaman: Date.now() });
+    ws.serializeAttachment({ id, mod, puan: oyuncu.puanlar[mod].puan, engelliler, zaman: Date.now() });
     await this.#eslestir(ws);
   }
 
@@ -43,7 +45,9 @@ export class Eslestirme extends DurableObject {
       .getWebSockets()
       .filter((o) => o !== ws && o.readyState === WebSocket.OPEN)
       .map((o) => [o, o.deserializeAttachment()])
-      .filter(([, a]) => a && a.mod === ben.mod && a.id !== ben.id && !a.eslesti);
+      .filter(([, a]) => a && a.mod === ben.mod && a.id !== ben.id && !a.eslesti)
+      // Birbirini engelleyenler eşleşmez.
+      .filter(([, a]) => !ben.engelliler.includes(a.id) && !a.engelliler.includes(ben.id));
     if (!adaylar.length) {
       ws.send(JSON.stringify({ t: "bekle" }));
       return;

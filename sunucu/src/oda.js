@@ -13,6 +13,7 @@ import { DurableObject } from "cloudflare:workers";
 import { CEVAPLAR, GECERLI } from "../../js/kelimeler.js";
 import { degerlendir } from "../../js/ortak/degerlendir.js";
 import { anahtarOzeti } from "./ozet.js";
+import { bildirimGonder } from "./eposta.js";
 
 export const HAK = 6;
 export const MODLAR = {
@@ -24,6 +25,7 @@ export const MODLAR = {
 const BONUS = { tahmin: 30000, yesil: 15000, turuncu: 10000 };
 const GERI_SAYIM = 3000; // iki oyuncu gelince başlamadan önce
 const TEMIZLIK = 60 * 60 * 1000; // hareketsiz oda bu kadar sonra silinir
+const SIKAYET_SEBEPLERI = { ad: "Uygunsuz takma ad", hile: "Hile", diger: "Başka bir sorun" };
 const ESLESME_BEKLEME = 20 * 1000; // eşleşen rakip bu sürede gelmezse oda kapanır
 
 // Son tahminin, öncekilere göre ne kadar yeni bilgi getirdiği.
@@ -90,6 +92,8 @@ export class DuelloOdasi extends DurableObject {
     if (!kim) return;
     if (mesaj.t === "tahmin") return this.#tahmin(ws, kim, String(mesaj.kelime || ""));
     if (mesaj.t === "rovans") return this.#rovans(kim);
+    if (mesaj.t === "sikayet") return this.#sikayet(ws, kim, mesaj.sebep);
+    if (mesaj.t === "engelle") return this.#engelle(ws, kim);
   }
 
   async webSocketClose(ws) {
@@ -109,6 +113,7 @@ export class DuelloOdasi extends DurableObject {
     if (typeof id !== "string" || typeof anahtar !== "string") return this.#hata(ws, "Kimlik eksik", true);
     const oyuncu = await this.#oyuncular().dogrula(id, await anahtarOzeti(anahtar));
     if (!oyuncu) return this.#hata(ws, "Kimlik doğrulanamadı", true);
+    if (oyuncu.yasakli) return this.#hata(ws, "Kurallara uymadığın için Düello'dan uzaklaştırıldın", true);
 
     const oda = this.oda;
     let uye = oda.oyuncular.find((o) => o.id === id);
@@ -250,10 +255,40 @@ export class DuelloOdasi extends DurableObject {
 
   async #rovans(id) {
     const oda = this.oda;
-    if (oda.durum !== "bitti" || oda.rovans.includes(id)) return;
+    if (oda.durum !== "bitti" || oda.rovans.includes(id) || oda.engelli) return;
     oda.rovans.push(id);
     if (oda.rovans.length === 2) await this.#baslat();
     else await this.#kaydet();
+    this.#yayinla();
+  }
+
+  #rakibi(id) {
+    return this.oda.oyuncular.find((o) => o.id !== id);
+  }
+
+  async #sikayet(ws, id, sebep) {
+    const rakip = this.#rakibi(id);
+    if (!rakip || !SIKAYET_SEBEPLERI[sebep]) return;
+    const sonuc = await this.#oyuncular().sikayetEt(id, rakip.id, sebep, this.oda.kod);
+    ws.send(JSON.stringify({ t: "bilgi", mesaj: "Şikâyetin alındı, teşekkürler. İnceleyeceğiz." }));
+    if (sonuc?.yeni) {
+      this.ctx.waitUntil(
+        bildirimGonder(
+          this.env,
+          `Harfoni: "${sonuc.hedefAd}" şikâyet edildi`,
+          `Sebep: ${SIKAYET_SEBEPLERI[sebep]}\nŞikâyet edilen: ${sonuc.hedefAd}\nBu kişi hakkındaki açık şikâyet sayısı: ${sonuc.acik}\n\nİncelemek için: https://api.harfoni.com/yonetim`
+        )
+      );
+    }
+  }
+
+  async #engelle(ws, id) {
+    const rakip = this.#rakibi(id);
+    if (!rakip) return;
+    await this.#oyuncular().engelle(id, rakip.id);
+    this.oda.engelli = true; // bu iki kişi rövanş yapamaz
+    await this.#kaydet();
+    ws.send(JSON.stringify({ t: "bilgi", mesaj: `${rakip.ad} engellendi. Bir daha eşleşmeyeceksiniz.` }));
     this.#yayinla();
   }
 
@@ -318,6 +353,7 @@ export class DuelloOdasi extends DurableObject {
         puan: oda.sonuc.puanlar && oda.sonuc.puanlar[id],
       },
       rovans: { ben: oda.rovans.includes(id), rakip: Boolean(rakip && oda.rovans.includes(rakip.id)) },
+      engelli: Boolean(oda.engelli),
     };
   }
 
