@@ -3,6 +3,9 @@
 // Gizli kelimeyi, süreyi ve tahminleri sunucu tutar; böylece kimse
 // rakibinin harflerini ya da cevabı göremez, süreyi uzatamaz.
 //
+// Satrançtaki gibi herkesin kendi saati var; iki saat aynı anda akar.
+// Hızlı modda her tahmin ve yeni bulunan her harf saate süre ekler.
+//
 // Oyuncular WebSocket ile bağlanır. Her değişiklikte sunucu iki oyuncuya da
 // kendi gözünden oyunun tam halini ("durum" mesajı) gönderir.
 
@@ -12,9 +15,34 @@ import { degerlendir } from "../../js/ortak/degerlendir.js";
 import { anahtarOzeti } from "./ozet.js";
 
 export const HAK = 6;
-export const SURE = 3 * 60 * 1000; // herkesin toplam süresi
+export const MODLAR = {
+  hizli: { sure: 3 * 60 * 1000, bonus: true },
+  uzun: { sure: 10 * 60 * 1000, bonus: false },
+};
+// Hızlı modda: her tahmin +30 sn, ilk kez yeşil olan her kare +15 sn,
+// ilk kez bulunan her turuncu harf +10 sn.
+const BONUS = { tahmin: 30000, yesil: 15000, turuncu: 10000 };
 const GERI_SAYIM = 3000; // iki oyuncu gelince başlamadan önce
 const TEMIZLIK = 60 * 60 * 1000; // hareketsiz oda bu kadar sonra silinir
+
+// Son tahminin, öncekilere göre ne kadar yeni bilgi getirdiği.
+export function yeniBilgi(oncekiler, tahmin, cevap) {
+  const yesilYerler = new Set();
+  const bilinenHarfler = new Set();
+  for (const t of oncekiler) {
+    degerlendir(t, cevap).forEach((renk, i) => {
+      if (renk === "dogru") yesilYerler.add(i);
+      if (renk !== "yok") bilinenHarfler.add(t[i]);
+    });
+  }
+  let yesil = 0;
+  const turuncu = new Set();
+  degerlendir(tahmin, cevap).forEach((renk, i) => {
+    if (renk === "dogru" && !yesilYerler.has(i)) yesil++;
+    if (renk === "var" && !bilinenHarfler.has(tahmin[i])) turuncu.add(tahmin[i]);
+  });
+  return { yesil, turuncu: turuncu.size };
+}
 
 export class DuelloOdasi extends DurableObject {
   constructor(ctx, env) {
@@ -33,9 +61,9 @@ export class DuelloOdasi extends DurableObject {
   }
 
   // Oda kodu alındığında bir kez çağrılır.
-  async kur(kod) {
+  async kur(kod, mod) {
     if (this.oda) return false;
-    this.oda = { kod, durum: "bekliyor", oyuncular: [], tahminler: {}, rovans: [], sonuc: null };
+    this.oda = { kod, mod: MODLAR[mod] ? mod : "hizli", durum: "bekliyor", oyuncular: [], tahminler: {}, rovans: [], sonuc: null };
     await this.#kaydet();
     await this.ctx.storage.setAlarm(Date.now() + TEMIZLIK);
     return true;
@@ -85,7 +113,7 @@ export class DuelloOdasi extends DurableObject {
     let uye = oda.oyuncular.find((o) => o.id === id);
     if (!uye) {
       if (oda.oyuncular.length >= 2) return this.#hata(ws, "Bu oda dolu", true);
-      uye = { id, ad: oyuncu.ad, puan: oyuncu.puan };
+      uye = { id, ad: oyuncu.ad, puan: oyuncu.puanlar[oda.mod].puan };
       oda.oyuncular.push(uye);
       oda.tahminler[id] = [];
     }
@@ -106,19 +134,38 @@ export class DuelloOdasi extends DurableObject {
     // TEST_CEVAP sadece yerel denemede (.dev.vars) kullanılır.
     oda.cevap = this.env.TEST_CEVAP || CEVAPLAR[Math.floor(Math.random() * CEVAPLAR.length)];
     oda.baslangic = Date.now() + GERI_SAYIM;
-    oda.bitis = oda.baslangic + SURE;
     oda.durum = "oyun";
     oda.sonuc = null;
     oda.rovans = [];
     oda.bulma = {}; // oyuncu kimliği -> kelimeyi bulduğu an
-    for (const o of oda.oyuncular) oda.tahminler[o.id] = [];
+    oda.bitis = {}; // oyuncu kimliği -> saatinin biteceği an (bonuslarla uzar)
+    oda.durdu = {}; // oyuncu kimliği -> oynamayı bitirdiği an (buldu, hakkı ya da süresi bitti)
+    for (const o of oda.oyuncular) {
+      oda.tahminler[o.id] = [];
+      // TEST_SURE sadece yerel denemede (.dev.vars) kullanılır.
+      oda.bitis[o.id] = oda.baslangic + (Number(this.env.TEST_SURE) || MODLAR[oda.mod].sure);
+    }
     await this.#kaydet();
-    await this.ctx.storage.setAlarm(oda.bitis);
+    await this.#alarmKur();
+  }
+
+  // En yakın saat bitişinde uyan.
+  async #alarmKur() {
+    const oda = this.oda;
+    const bekleyenler = oda.oyuncular.filter((o) => oda.durdu[o.id] == null).map((o) => oda.bitis[o.id]);
+    if (bekleyenler.length) await this.ctx.storage.setAlarm(Math.min(...bekleyenler));
   }
 
   #oyuncuBitti(id) {
-    const t = this.oda.tahminler[id];
-    return t.length >= HAK || t.includes(this.oda.cevap);
+    return this.oda.durdu[id] != null;
+  }
+
+  // Saati dolan oyuncuları durdurur.
+  #saatleriKontrolEt(simdi) {
+    const oda = this.oda;
+    for (const o of oda.oyuncular) {
+      if (oda.durdu[o.id] == null && simdi >= oda.bitis[o.id]) oda.durdu[o.id] = oda.bitis[o.id];
+    }
   }
 
   async #tahmin(ws, id, kelime) {
@@ -126,16 +173,29 @@ export class DuelloOdasi extends DurableObject {
     const simdi = Date.now();
     if (oda.durum !== "oyun" || !oda.tahminler[id]) return;
     if (simdi < oda.baslangic) return this.#hata(ws, "Henüz başlamadı");
-    if (simdi >= oda.bitis) return this.#bitir();
-    if (this.#oyuncuBitti(id)) return this.#hata(ws, "Tahmin hakkın bitti");
+    this.#saatleriKontrolEt(simdi);
+    if (this.#oyuncuBitti(id)) {
+      if (this.#sonucBelli()) return this.#bitir();
+      await this.#kaydet();
+      this.#yayinla();
+      return this.#hata(ws, "Oynama süren bitti");
+    }
     kelime = kelime.toLocaleLowerCase("tr-TR");
     if ([...kelime].length !== 5) return this.#hata(ws, "Harf sayısı yetersiz");
     if (!GECERLI.has(kelime)) return this.#hata(ws, "Sözlükte yok");
 
-    oda.tahminler[id].push(kelime);
+    const oncekiler = oda.tahminler[id];
+    if (MODLAR[oda.mod].bonus) {
+      const { yesil, turuncu } = yeniBilgi(oncekiler, kelime, oda.cevap);
+      oda.bitis[id] += BONUS.tahmin + yesil * BONUS.yesil + turuncu * BONUS.turuncu;
+    }
+    oncekiler.push(kelime);
     if (kelime === oda.cevap) oda.bulma[id] = simdi;
+    if (kelime === oda.cevap || oncekiler.length >= HAK) oda.durdu[id] = simdi;
+
     if (this.#sonucBelli()) return this.#bitir();
     await this.#kaydet();
+    await this.#alarmKur();
     this.#yayinla();
   }
 
@@ -174,10 +234,12 @@ export class DuelloOdasi extends DurableObject {
     if (oda.durum !== "oyun") return;
     const kazanan = this.#kazanan();
     oda.durum = "bitti";
-    oda.bitisAni = Math.min(oda.bitis, Date.now());
+    // Hâlâ oynayan varsa saati şimdi durur.
+    const simdi = Date.now();
+    for (const o of oda.oyuncular) if (oda.durdu[o.id] == null) oda.durdu[o.id] = Math.min(simdi, oda.bitis[o.id]);
     const [a, b] = oda.oyuncular;
     const sonucA = kazanan === null ? 0.5 : kazanan === a.id ? 1 : 0;
-    const puanlar = await this.#oyuncular().macSonucu(a.id, b.id, sonucA);
+    const puanlar = await this.#oyuncular().macSonucu(a.id, b.id, sonucA, oda.mod);
     if (puanlar) for (const o of oda.oyuncular) o.puan = puanlar[o.id].yeni;
     oda.sonuc = { kazanan, puanlar };
     await this.#kaydet();
@@ -197,13 +259,17 @@ export class DuelloOdasi extends DurableObject {
   async alarm() {
     const oda = this.oda;
     if (!oda) return;
-    if (oda.durum === "oyun" && Date.now() >= oda.bitis) return this.#bitir();
-    if (oda.durum !== "oyun") {
-      // Uzun süre hareketsiz kalan odayı temizle.
-      for (const ws of this.ctx.getWebSockets()) ws.close(4001, "Oda kapandı");
-      await this.ctx.storage.deleteAll();
-      this.oda = null;
+    if (oda.durum === "oyun") {
+      this.#saatleriKontrolEt(Date.now());
+      if (this.#sonucBelli()) return this.#bitir();
+      await this.#kaydet();
+      await this.#alarmKur();
+      return this.#yayinla();
     }
+    // Uzun süre hareketsiz kalan odayı temizle.
+    for (const ws of this.ctx.getWebSockets()) ws.close(4001, "Oda kapandı");
+    await this.ctx.storage.deleteAll();
+    this.oda = null;
   }
 
   #hata(ws, mesaj, kapat = false) {
@@ -218,28 +284,27 @@ export class DuelloOdasi extends DurableObject {
     const ben = oda.oyuncular.find((o) => o.id === id);
     const rakip = oda.oyuncular.find((o) => o.id !== id);
     const bitti = oda.durum === "bitti";
-    const satirlar = (kim, harflerle) =>
-      (oda.tahminler[kim] || []).map((kelime) => ({
+    const oyuncu = (o, harflerle) => ({
+      ad: o.ad,
+      puan: o.puan,
+      bitis: oda.bitis?.[o.id],
+      durdu: oda.durdu?.[o.id] ?? null,
+      satirlar: (oda.tahminler[o.id] || []).map((kelime) => ({
         renkler: degerlendir(kelime, oda.cevap),
         ...(harflerle ? { kelime } : {}),
-      }));
+      })),
+    });
 
     return {
       t: "durum",
       kod: oda.kod,
+      mod: oda.mod,
       durum: oda.durum,
       simdi: Date.now(),
       baslangic: oda.baslangic,
-      bitis: oda.bitis,
-      bitisAni: oda.bitisAni,
       hak: HAK,
-      ben: { ad: ben.ad, puan: ben.puan, satirlar: satirlar(id, true) },
-      rakip: rakip && {
-        ad: rakip.ad,
-        puan: rakip.puan,
-        bagli: bagliOlanlar.has(rakip.id),
-        satirlar: satirlar(rakip.id, bitti),
-      },
+      ben: oyuncu(ben, true),
+      rakip: rakip && { ...oyuncu(rakip, bitti), bagli: bagliOlanlar.has(rakip.id) },
       sonuc: bitti && {
         cevap: oda.cevap,
         // kelimeyi buldukları süre (ms); bulamayan için null

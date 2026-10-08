@@ -13,6 +13,10 @@ import { YEREL, WS_SUNUCU, DUELLO_ADRESI, istek } from "../ortak/sunucu.js";
 const UZUNLUK = 5;
 const CEVIRME_ARASI = 280;
 const EMOJI = { dogru: "🟦", var: "🟧", yok: "⬛" };
+const MODLAR = {
+  hizli: { ad: "Hızlı", aciklama: "3 dakika + bonus" },
+  uzun: { ad: "Uzun", aciklama: "10 dakika" },
+};
 
 const $ = (id) => document.getElementById(id);
 const parametreler = new URLSearchParams(location.search);
@@ -34,6 +38,7 @@ let cizilenSatir = 0;
 let mevcut = "";
 let kilitli = false;
 let sonucGosterildi = false;
+let oncekiBitis = null; // bonus geldiğini anlamak için
 let bekleBildirildi = false;
 let rakipBulduBildirildi = false;
 
@@ -59,11 +64,14 @@ function profiliGoster() {
   $("profil-ac").hidden = !profil;
   if (!profil) return;
   $("lobi-ad").textContent = profil.ad;
-  $("lobi-puan").textContent = profil.puan;
-  $("profil-puan").textContent = profil.puan;
-  $("profil-mac").textContent = profil.mac;
-  $("profil-galibiyet").textContent = profil.galibiyet;
-  $("profil-beraberlik").textContent = profil.beraberlik;
+  for (const mod of Object.keys(MODLAR)) {
+    const p = profil.puanlar[mod];
+    $(`lobi-puan-${mod}`).textContent = p.puan;
+    $(`profil-puan-${mod}`).textContent = p.puan;
+    $(`profil-mac-${mod}`).textContent = p.mac;
+    $(`profil-galibiyet-${mod}`).textContent = p.galibiyet;
+    $(`profil-beraberlik-${mod}`).textContent = p.beraberlik;
+  }
   $("profil-ad").value = profil.ad;
 }
 
@@ -102,11 +110,10 @@ function lobiyeDon(mesaj) {
   if (mesaj) bildir(mesaj, 2500);
 }
 
-async function davetEt() {
-  const dugme = $("davet-et");
+async function davetEt(mod, dugme) {
   dugme.disabled = true;
   try {
-    const { kod } = await istek("/duello");
+    const { kod } = await istek("/duello", { mod });
     odaKodu = kod;
     const k = YEREL && parametreler.get("k") ? `&k=${parametreler.get("k")}` : "";
     history.replaceState(null, "", `?oda=${kod}${k}`);
@@ -123,7 +130,7 @@ function davetAdresi() {
 }
 
 async function davetiPaylas() {
-  const metin = `Harfoni Düello'da sana meydan okuyorum! ⚔️ Aynı kelimeyi aynı anda arıyoruz, daha az tahminde bulan kazanır.\n${davetAdresi()}`;
+  const metin = `Harfoni Düello'da sana meydan okuyorum! ⚔️ Aynı kelimeyi aynı anda arıyoruz, daha az tahminde bulan kazanır. (${MODLAR[durum?.mod]?.ad || "Hızlı"} mod)\n${davetAdresi()}`;
   const dokunmatik = window.matchMedia("(pointer: coarse)").matches;
   if (dokunmatik && navigator.share) {
     try {
@@ -224,6 +231,7 @@ function yeniOyun(d) {
   mevcut = "";
   kilitli = false;
   sonucGosterildi = false;
+  oncekiBitis = null;
   bekleBildirildi = false;
   rakipBulduBildirildi = false;
   tahtaKur(tahta, d.hak, "satir");
@@ -240,13 +248,18 @@ function ciz(d) {
     ekranGoster("bekleme");
     $("alt-baslik").textContent = "";
     $("oda-kodu").textContent = d.kod;
+    $("bekleme-mod").textContent = `${MODLAR[d.mod].ad} mod · ${MODLAR[d.mod].aciklama}`;
     $("davet-adresi").textContent = davetAdresi().replace(/^https?:\/\//, "");
     return;
   }
 
   if (oyunAnahtari !== d.baslangic) yeniOyun(d);
   ekranGoster("oyun");
-  $("alt-baslik").textContent = "";
+  $("alt-baslik").textContent = `${MODLAR[d.mod].ad} · ${MODLAR[d.mod].aciklama}`;
+
+  // Hızlı modda tahmin sonrası saate eklenen süre
+  if (oncekiBitis !== null && d.ben.bitis > oncekiBitis) bonusGoster(d.ben.bitis - oncekiBitis);
+  oncekiBitis = d.ben.bitis;
 
   // Rakip
   $("rakip-ad").textContent = d.rakip.ad;
@@ -269,11 +282,13 @@ function ciz(d) {
   mevcutSatiriCiz();
 
   const benBuldum = satirlar.some(tamDogru);
-  if (d.durum === "oyun" && (benBuldum || satirlar.length >= d.hak) && !bekleBildirildi) {
+  if (d.durum === "oyun" && d.ben.durdu !== null && !bekleBildirildi) {
     bekleBildirildi = true;
     const mesaj = benBuldum
       ? `Buldun! ${d.rakip.ad} ${satirlar.length - 1} ya da daha az tahminde bulamazsa kazanırsın.`
-      : `Hakların bitti, ${d.rakip.ad} hâlâ oynuyor…`;
+      : satirlar.length >= d.hak
+        ? `Hakların bitti, ${d.rakip.ad} hâlâ oynuyor…`
+        : `Süren bitti, ${d.rakip.ad} hâlâ oynuyor…`;
     setTimeout(() => bildir(mesaj, 3500), 1600);
   }
   const rakipBuldu = d.rakip.satirlar.findIndex(tamDogru) + 1;
@@ -347,14 +362,36 @@ function saatiGuncelle() {
   ortu.hidden = !baslamadi;
   if (baslamadi) $("geri-sayim-sayi").textContent = Math.ceil((durum.baslangic - simdi) / 1000);
 
-  // Maç bitince saat, bittiği andaki kalan sürede durur.
-  const an = durum.durum === "oyun" ? Math.max(simdi, durum.baslangic) : durum.bitisAni;
-  const kalan = Math.max(0, (durum.bitis - an) / 1000);
-  const goster = Math.ceil(kalan);
+  const ben = kalanSure(durum.ben, simdi);
   const saat = $("saat");
-  saat.textContent = `${Math.floor(goster / 60)}:${String(goster % 60).padStart(2, "0")}`;
-  saat.classList.toggle("az", durum.durum === "oyun" && kalan <= 30);
-  saat.classList.toggle("durdu", durum.durum !== "oyun");
+  saat.textContent = sureYazisi(ben);
+  saat.classList.toggle("az", durum.ben.durdu === null && ben <= 30);
+  saat.classList.toggle("durdu", durum.ben.durdu !== null);
+
+  const rakip = kalanSure(durum.rakip, simdi);
+  $("rakip-saat").textContent = durum.rakip.durdu !== null && rakip > 0 ? "bitirdi" : sureYazisi(rakip);
+}
+
+// Saniye cinsinden kalan süre. Oynamayı bitiren oyuncunun saati durur.
+function kalanSure(oyuncu, simdi) {
+  const an = oyuncu.durdu ?? Math.max(simdi, durum.baslangic);
+  return Math.max(0, (oyuncu.bitis - an) / 1000);
+}
+
+function sureYazisi(saniye) {
+  const s = Math.ceil(saniye);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function bonusGoster(ms) {
+  const el = document.createElement("span");
+  el.className = "bonus";
+  el.textContent = `+${Math.round(ms / 1000)} sn`;
+  // Harfler döndükten sonra görünsün.
+  setTimeout(() => {
+    $("saat-kutusu").appendChild(el);
+    setTimeout(() => el.remove(), 1800);
+  }, 1500);
 }
 setInterval(saatiGuncelle, 200);
 
@@ -363,7 +400,7 @@ setInterval(saatiGuncelle, 200);
 function oynayabilir() {
   if (!durum || durum.durum !== "oyun" || kilitli) return false;
   const simdi = sunucuSaati();
-  if (simdi < durum.baslangic || simdi >= durum.bitis) return false;
+  if (simdi < durum.baslangic || simdi >= durum.ben.bitis || durum.ben.durdu !== null) return false;
   const satirlar = durum.ben.satirlar;
   return satirlar.length < durum.hak && !satirlar.some(tamDogru);
 }
@@ -410,7 +447,7 @@ function sonucuDoldur(d) {
   const degisim = $("puan-degisimi");
   if (puan) {
     const fark = puan.yeni - puan.eski;
-    degisim.innerHTML = `Puanın: ${puan.eski} → <strong>${puan.yeni}</strong> <span class="${fark >= 0 ? "artti" : "azaldi"}">(${fark >= 0 ? "+" : ""}${fark})</span>`;
+    degisim.innerHTML = `${MODLAR[d.mod].ad} puanın: ${puan.eski} → <strong>${puan.yeni}</strong> <span class="${fark >= 0 ? "artti" : "azaldi"}">(${fark >= 0 ? "+" : ""}${fark})</span>`;
   } else {
     degisim.textContent = "";
   }
@@ -463,7 +500,7 @@ function sonucMetni() {
       : d.sonuc.kazanan === "rakip"
         ? `${d.rakip.ad} bu sefer beni geçti.`
         : `${d.rakip.ad} ile berabere kaldık.`;
-  return `Harfoni Düello ⚔️\n${baslik}\n\n${satirlar.join("\n")}\n\nSen de meydan oku: ${DUELLO_ADRESI}`;
+  return `Harfoni Düello ⚔️ ${MODLAR[d.mod].ad}\n${baslik}\n\n${satirlar.join("\n")}\n\nSen de meydan oku: ${DUELLO_ADRESI}`;
 }
 
 // ---------- Başlangıç ----------
@@ -508,7 +545,9 @@ async function basla() {
       bildir(hata.message, 3000);
     }
   });
-  $("davet-et").addEventListener("click", davetEt);
+  for (const dugme of document.querySelectorAll("[data-mod]")) {
+    dugme.addEventListener("click", () => davetEt(dugme.dataset.mod, dugme));
+  }
   $("davet-paylas").addEventListener("click", davetiPaylas);
   $("vazgec").addEventListener("click", () => lobiyeDon());
   $("rovans").addEventListener("click", () => gonder({ t: "rovans" }));

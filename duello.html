@@ -20,7 +20,7 @@
   <meta property="og:site_name" content="Harfoni">
   <meta property="og:locale" content="tr_TR">
   <meta property="og:title" content="Harfoni Düello: sana meydan okunuyor!">
-  <meta property="og:description" content="Aynı kelimeyi aynı anda arayın, daha az tahminde bulan kazanır. 3 dakika, 6 tahmin.">
+  <meta property="og:description" content="Aynı kelimeyi aynı anda arayın, daha az tahminde bulan kazanır. 6 tahmin, Hızlı ya da Uzun mod.">
   <meta property="og:url" content="https://harfoni.com/duello.html">
   <meta property="og:image" content="https://harfoni.com/gorseller/paylasim.png">
   <meta property="og:image:width" content="1200">
@@ -64,15 +64,28 @@
     <section id="ekran-lobi" class="duello-ekran" hidden>
       <div class="profil-karti">
         <strong id="lobi-ad"></strong>
-        <span><b id="lobi-puan">1000</b> puan</span>
+        <div class="lobi-puanlar">
+          <span>Hızlı <b id="lobi-puan-hizli">1000</b></span>
+          <span>Uzun <b id="lobi-puan-uzun">1000</b></span>
+        </div>
       </div>
       <p>Arkadaşına bir bağlantı gönder. Aynı gizli kelimeyi aynı anda arayın: <strong>daha az tahminde bulan kazanır!</strong></p>
-      <button id="davet-et" class="ana-dugme" type="button">Arkadaşına meydan oku</button>
-      <p class="not">Herkesin 6 tahmini ve 3 dakikası var. Rakibinin harflerini değil, sadece renklerini görürsün.</p>
+      <div class="mod-dugmeleri">
+        <button class="mod-dugmesi" type="button" data-mod="hizli">
+          <strong>Hızlı</strong>
+          <span>3 dakika · her tahminde süre kazan</span>
+        </button>
+        <button class="mod-dugmesi" type="button" data-mod="uzun">
+          <strong>Uzun</strong>
+          <span>10 dakika · acele etme</span>
+        </button>
+      </div>
+      <p class="not">Herkesin 6 tahmini var. Rakibinin harflerini değil, sadece renklerini görürsün. Her modun puanı ayrı tutulur.</p>
     </section>
 
     <section id="ekran-bekleme" class="duello-ekran" hidden>
       <h2>Rakibini bekliyorsun</h2>
+      <p id="bekleme-mod" class="bekleme-mod"></p>
       <p>Bu bağlantıyı arkadaşına gönder. Açtığı anda maç başlar.</p>
       <div class="davet-kutusu">
         <span class="oda-kodu" id="oda-kodu"></span>
@@ -86,10 +99,12 @@
       <div class="duello-ust">
         <div class="rakip-bilgi">
           <div class="rakip-ad"><span id="rakip-bagli" class="bagli-isareti"></span><strong id="rakip-ad"></strong></div>
-          <span id="rakip-puan" class="soluk-yazi"></span>
+          <span class="soluk-yazi"><span id="rakip-puan"></span> · ⏱ <span id="rakip-saat"></span></span>
         </div>
         <div id="rakip-tahta" class="mini-tahta" aria-label="Rakibinin renkleri"></div>
-        <div id="saat" class="saat">3:00</div>
+        <div id="saat-kutusu" class="saat-kutusu">
+          <div id="saat" class="saat">3:00</div>
+        </div>
       </div>
       <main class="tahta-alani">
         <div id="tahta" class="tahta" aria-label="Tahminlerin"></div>
@@ -105,7 +120,7 @@
     <button class="kapat" type="button" data-kapat aria-label="Kapat">×</button>
     <h2>Düello nasıl oynanır?</h2>
     <p>İki kişi <strong>aynı gizli kelimeyi aynı anda</strong> arar. Kelimeyi <strong>daha az tahminde bulan</strong> kazanır. Tahmin sayınız eşitse <strong>daha erken bulan</strong> kazanır.</p>
-    <p>Herkesin <strong>6 tahmini</strong> ve toplam <strong>3 dakikası</strong> var. Renkler Klasik'teki gibi:</p>
+    <p>Herkesin <strong>6 tahmini</strong> ve satrançtaki gibi <strong>kendi saati</strong> var. Renkler Klasik'teki gibi:</p>
     <div class="ornek">
       <div class="satir kucuk-satir">
         <div class="kare" data-durum="dogru">K</div><div class="kare" data-durum="var">A</div><div class="kare" data-durum="yok">L</div><div class="kare" data-durum="yok">E</div><div class="kare" data-durum="yok">M</div>
@@ -114,8 +129,11 @@
     </div>
     <p>Rakibinin tahminlerini göremezsin, sadece <strong>renklerini</strong> görürsün. Seninkiler de ona görünür: her tahminin rakibine de ipucu verir!</p>
     <p>Rakibin kelimeyi bulduğunda oyun bitmez. Ondan daha az tahminde bulabilirsen hâlâ kazanabilirsin.</p>
-    <p>İkiniz de bulamazsanız maç berabere biter.</p>
-    <p class="not">Herkes 1000 puanla başlar. Kazanınca puanın artar, kaybedince azalır. Senden güçlü birini yenmek daha çok puan kazandırır.</p>
+    <p>İkiniz de bulamazsanız maç berabere biter. Süresi biten oyuncu daha fazla tahmin yapamaz.</p>
+    <h3>İki mod</h3>
+    <p><strong>Hızlı:</strong> 3 dakikayla başlarsın. Her tahmin saatine <strong>+30 sn</strong> ekler. İlk kez yeşil olan her kare <strong>+15 sn</strong>, ilk kez bulduğun her turuncu harf <strong>+10 sn</strong> daha kazandırır.</p>
+    <p><strong>Uzun:</strong> 10 dakika, ek süre yok. Acele etmeden düşünmek isteyenler için.</p>
+    <p class="not">Herkes her modda 1000 puanla başlar. Kazanınca puanın artar, kaybedince azalır. Senden güçlü birini yenmek daha çok puan kazandırır.</p>
   </dialog>
 
   <dialog id="sonuc-penceresi" class="pencere">
@@ -137,11 +155,19 @@
   <dialog id="profil-penceresi" class="pencere">
     <button class="kapat" type="button" data-kapat aria-label="Kapat">×</button>
     <h2>Profilin</h2>
+    <h3>Hızlı</h3>
     <div class="istatistikler">
-      <div><strong id="profil-puan">1000</strong><span>Puan</span></div>
-      <div><strong id="profil-mac">0</strong><span>Maç</span></div>
-      <div><strong id="profil-galibiyet">0</strong><span>Galibiyet</span></div>
-      <div><strong id="profil-beraberlik">0</strong><span>Beraberlik</span></div>
+      <div><strong id="profil-puan-hizli">1000</strong><span>Puan</span></div>
+      <div><strong id="profil-mac-hizli">0</strong><span>Maç</span></div>
+      <div><strong id="profil-galibiyet-hizli">0</strong><span>Galibiyet</span></div>
+      <div><strong id="profil-beraberlik-hizli">0</strong><span>Beraberlik</span></div>
+    </div>
+    <h3>Uzun</h3>
+    <div class="istatistikler">
+      <div><strong id="profil-puan-uzun">1000</strong><span>Puan</span></div>
+      <div><strong id="profil-mac-uzun">0</strong><span>Maç</span></div>
+      <div><strong id="profil-galibiyet-uzun">0</strong><span>Galibiyet</span></div>
+      <div><strong id="profil-beraberlik-uzun">0</strong><span>Beraberlik</span></div>
     </div>
     <h3>Takma ad</h3>
     <form id="profil-formu" class="ad-formu">

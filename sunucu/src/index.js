@@ -3,7 +3,7 @@
 //   POST /oyuncu          { id, anahtar, ad }  kaydol ya da adını güncelle
 //   POST /oyuncu/bilgi    { id, anahtar }      puanını ve maç sayılarını al
 //   POST /oyuncu/sil      { id, anahtar }      tüm bilgilerini sil
-//   POST /duello                               yeni oda aç, kodunu al
+//   POST /duello          { mod }              yeni oda aç (hizli | uzun), kodunu al
 //   GET  /duello/KOD      (WebSocket)          odaya bağlan
 
 import { anahtarOzeti } from "./ozet.js";
@@ -78,10 +78,11 @@ export default {
     if (istek.method !== "POST") return cevap({ ad: "Harfoni sunucusu" }, kaynak);
 
     if (url.pathname === "/duello") {
+      const { mod } = await istek.json().catch(() => ({}));
       for (let deneme = 0; deneme < 5; deneme++) {
         const kod = kodUret();
         const oda = env.ODALAR.get(env.ODALAR.idFromName(kod));
-        if (await oda.kur(kod)) return cevap({ kod }, kaynak);
+        if (await oda.kur(kod, mod)) return cevap({ kod }, kaynak);
       }
       return cevap({ hata: "Oda açılamadı, tekrar dene" }, kaynak, 500);
     }
