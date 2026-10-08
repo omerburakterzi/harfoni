@@ -24,6 +24,7 @@ export const MODLAR = {
 const BONUS = { tahmin: 30000, yesil: 15000, turuncu: 10000 };
 const GERI_SAYIM = 3000; // iki oyuncu gelince başlamadan önce
 const TEMIZLIK = 60 * 60 * 1000; // hareketsiz oda bu kadar sonra silinir
+const ESLESME_BEKLEME = 20 * 1000; // eşleşen rakip bu sürede gelmezse oda kapanır
 
 // Son tahminin, öncekilere göre ne kadar yeni bilgi getirdiği.
 export function yeniBilgi(oncekiler, tahmin, cevap) {
@@ -61,11 +62,11 @@ export class DuelloOdasi extends DurableObject {
   }
 
   // Oda kodu alındığında bir kez çağrılır.
-  async kur(kod, mod) {
+  async kur(kod, mod, eslesme = false) {
     if (this.oda) return false;
-    this.oda = { kod, mod: MODLAR[mod] ? mod : "hizli", durum: "bekliyor", oyuncular: [], tahminler: {}, rovans: [], sonuc: null };
+    this.oda = { kod, mod: MODLAR[mod] ? mod : "hizli", eslesme, durum: "bekliyor", oyuncular: [], tahminler: {}, rovans: [], sonuc: null };
     await this.#kaydet();
-    await this.ctx.storage.setAlarm(Date.now() + TEMIZLIK);
+    await this.ctx.storage.setAlarm(Date.now() + (eslesme ? ESLESME_BEKLEME : TEMIZLIK));
     return true;
   }
 
@@ -266,8 +267,10 @@ export class DuelloOdasi extends DurableObject {
       await this.#alarmKur();
       return this.#yayinla();
     }
-    // Uzun süre hareketsiz kalan odayı temizle.
-    for (const ws of this.ctx.getWebSockets()) ws.close(4001, "Oda kapandı");
+    // Uzun süre hareketsiz kalan odayı temizle. Rastgele eşleşmede rakip
+    // hiç gelmediyse bekleyen oyuncu yeniden aramaya döner (4003).
+    const gelmedi = oda.eslesme && oda.durum === "bekliyor";
+    for (const ws of this.ctx.getWebSockets()) ws.close(gelmedi ? 4003 : 4001, gelmedi ? "Rakip bağlanamadı" : "Oda kapandı");
     await this.ctx.storage.deleteAll();
     this.oda = null;
   }
@@ -299,6 +302,7 @@ export class DuelloOdasi extends DurableObject {
       t: "durum",
       kod: oda.kod,
       mod: oda.mod,
+      eslesme: Boolean(oda.eslesme),
       durum: oda.durum,
       simdi: Date.now(),
       baslangic: oda.baslangic,

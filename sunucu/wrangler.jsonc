@@ -9,10 +9,14 @@
   "durable_objects": {
     "bindings": [
       { "name": "ODALAR", "class_name": "DuelloOdasi" },
-      { "name": "OYUNCULAR", "class_name": "Oyuncular" }
+      { "name": "OYUNCULAR", "class_name": "Oyuncular" },
+      { "name": "ESLESTIRME", "class_name": "Eslestirme" }
     ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DuelloOdasi", "Oyuncular"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["DuelloOdasi", "Oyuncular"] },
+    { "tag": "v2", "new_sqlite_classes": ["Eslestirme"] }
+  ],
   "observability": { "enabled": false },
   "send_metrics": false
 }

@@ -69,29 +69,45 @@
           <span>Uzun <b id="lobi-puan-uzun">1000</b></span>
         </div>
       </div>
-      <p>Arkadaşına bir bağlantı gönder. Aynı gizli kelimeyi aynı anda arayın: <strong>daha az tahminde bulan kazanır!</strong></p>
-      <div class="mod-dugmeleri">
-        <button class="mod-dugmesi" type="button" data-mod="hizli">
+      <p>Aynı gizli kelimeyi rakibinle aynı anda ara: <strong>daha az tahminde bulan kazanır!</strong></p>
+      <div class="mod-dugmeleri" role="radiogroup" aria-label="Mod">
+        <button class="mod-dugmesi" type="button" role="radio" data-mod="hizli">
           <strong>Hızlı</strong>
           <span>3 dakika · her tahminde süre kazan</span>
         </button>
-        <button class="mod-dugmesi" type="button" data-mod="uzun">
+        <button class="mod-dugmesi" type="button" role="radio" data-mod="uzun">
           <strong>Uzun</strong>
           <span>10 dakika · acele etme</span>
         </button>
       </div>
+      <button id="rakip-bul" class="ana-dugme" type="button">Rakip bul</button>
+      <button id="davet-et" class="duz-dugme cerceveli" type="button">Arkadaşını davet et</button>
       <p class="not">Herkesin 6 tahmini var. Rakibinin harflerini değil, sadece renklerini görürsün. Her modun puanı ayrı tutulur.</p>
     </section>
 
-    <section id="ekran-bekleme" class="duello-ekran" hidden>
-      <h2>Rakibini bekliyorsun</h2>
-      <p id="bekleme-mod" class="bekleme-mod"></p>
-      <p>Bu bağlantıyı arkadaşına gönder. Açtığı anda maç başlar.</p>
-      <div class="davet-kutusu">
-        <span class="oda-kodu" id="oda-kodu"></span>
-        <span class="davet-adresi" id="davet-adresi"></span>
+    <section id="ekran-arama" class="duello-ekran" hidden>
+      <div class="arama-isareti" aria-hidden="true"><i></i><i></i><i></i></div>
+      <h2>Rakip aranıyor…</h2>
+      <p id="arama-mod" class="bekleme-mod"></p>
+      <p class="soluk-yazi">Geçen süre <strong id="arama-sure">0:00</strong></p>
+      <div id="arama-oneri" class="arama-oneri" hidden>
+        <p>Şu an çevrimiçi rakip bulamadık. Aramaya devam ediyoruz; istersen bir arkadaşını davet et.</p>
+        <button id="aramadan-davet" class="duz-dugme cerceveli" type="button">Arkadaşını davet et</button>
       </div>
-      <button id="davet-paylas" class="ana-dugme" type="button">Bağlantıyı gönder</button>
+      <button id="arama-iptal" class="duz-dugme" type="button">Vazgeç</button>
+    </section>
+
+    <section id="ekran-bekleme" class="duello-ekran" hidden>
+      <h2 id="bekleme-baslik">Rakibini bekliyorsun</h2>
+      <p id="bekleme-mod" class="bekleme-mod"></p>
+      <div id="davet-alani">
+        <p>Bu bağlantıyı arkadaşına gönder. Açtığı anda maç başlar.</p>
+        <div class="davet-kutusu">
+          <span class="oda-kodu" id="oda-kodu"></span>
+          <span class="davet-adresi" id="davet-adresi"></span>
+        </div>
+        <button id="davet-paylas" class="ana-dugme" type="button">Bağlantıyı gönder</button>
+      </div>
       <button id="vazgec" class="duz-dugme" type="button">Vazgeç</button>
     </section>
 

@@ -5,14 +5,15 @@
 //   POST /oyuncu/sil      { id, anahtar }      tüm bilgilerini sil
 //   POST /duello          { mod }              yeni oda aç (hizli | uzun), kodunu al
 //   GET  /duello/KOD      (WebSocket)          odaya bağlan
+//   GET  /eslestir        (WebSocket)          rastgele rakip ara
 
 import { anahtarOzeti } from "./ozet.js";
+import { odaAc } from "./kod.js";
 
 export { DuelloOdasi } from "./oda.js";
 export { Oyuncular } from "./oyuncular.js";
+export { Eslestirme } from "./eslestirme.js";
 
-// Karıştırılabilecek harfler (O/0, I/1, L) kodda yok.
-const KOD_HARFLERI = "ABCDEFGHJKMNPRSTUVYZ23456789";
 const KIMLIK = /^[0-9a-f]{32}$/;
 
 function izinliKaynak(kaynak) {
@@ -32,17 +33,25 @@ function cevap(veri, kaynak, durum = 200) {
   });
 }
 
+// Takma adlar rastgele rakiplere de göründüğü için kaba sözler engellenir.
+// Uzun kökler kelimenin içinde de aranır; kısalar sadece tek başına kelimeyse
+// (ör. "klasik" içindeki "sik" sorun değil).
+const YASAK_KOKLER = ["orospu", "yarrak", "amcık", "amına", "amina", "siktir", "sikerim", "sikik", "pezevenk", "kahpe", "yavşak", "şerefsiz", "kaltak", "dalyarak", "taşak", "gavat", "puşt", "fuck", "bitch", "porno", "pussy", "dick"];
+const YASAK_KELIMELER = ["amk", "aq", "oç", "piç", "sik", "göt", "ibne", "sex", "seks", "am"];
+
+function kabaMi(ad) {
+  const kucuk = ad.toLocaleLowerCase("tr-TR");
+  const bitisik = kucuk.replace(/[^\p{L}]/gu, "");
+  if (YASAK_KOKLER.some((kok) => bitisik.includes(kok))) return true;
+  return kucuk.split(/[^\p{L}]+/u).some((kelime) => YASAK_KELIMELER.includes(kelime));
+}
+
 // Takma ad: 2-16 karakter; harf, rakam, boşluk ve _ . - olabilir.
 function adTemizle(ad) {
   const temiz = String(ad || "").replace(/\s+/g, " ").trim();
   if ([...temiz].length < 2 || [...temiz].length > 16) return null;
   if (!/^[\p{L}\p{N} _.\-]+$/u.test(temiz)) return null;
   return temiz;
-}
-
-function kodUret() {
-  const sayilar = crypto.getRandomValues(new Uint8Array(6));
-  return [...sayilar].map((s) => KOD_HARFLERI[s % KOD_HARFLERI.length]).join("");
 }
 
 export default {
@@ -75,16 +84,17 @@ export default {
       return oda.fetch(istek);
     }
 
+    if (url.pathname === "/eslestir" && istek.method === "GET") {
+      if (kaynak && !izinliKaynak(kaynak)) return new Response("İzin yok", { status: 403 });
+      return env.ESLESTIRME.get(env.ESLESTIRME.idFromName("tum")).fetch(istek);
+    }
+
     if (istek.method !== "POST") return cevap({ ad: "Harfoni sunucusu" }, kaynak);
 
     if (url.pathname === "/duello") {
       const { mod } = await istek.json().catch(() => ({}));
-      for (let deneme = 0; deneme < 5; deneme++) {
-        const kod = kodUret();
-        const oda = env.ODALAR.get(env.ODALAR.idFromName(kod));
-        if (await oda.kur(kod, mod)) return cevap({ kod }, kaynak);
-      }
-      return cevap({ hata: "Oda açılamadı, tekrar dene" }, kaynak, 500);
+      const kod = await odaAc(env, mod);
+      return kod ? cevap({ kod }, kaynak) : cevap({ hata: "Oda açılamadı, tekrar dene" }, kaynak, 500);
     }
 
     let govde;
@@ -100,6 +110,7 @@ export default {
     if (url.pathname === "/oyuncu") {
       const ad = adTemizle(govde.ad);
       if (!ad) return cevap({ hata: "Ad 2-16 karakter olmalı; harf, rakam ve boşluk kullanabilirsin" }, kaynak, 400);
+      if (kabaMi(ad)) return cevap({ hata: "Bu ad kullanılamaz, başka bir ad seç" }, kaynak, 400);
       const oyuncu = await oyuncular.kaydet(id, ozet, ad);
       return oyuncu ? cevap(oyuncu, kaynak) : cevap({ hata: "Kimlik doğrulanamadı" }, kaynak, 403);
     }

@@ -28,6 +28,9 @@ let kimlik;
 let profil = null;
 let odaKodu = null;
 let ws = null;
+let aramaSoketi = null;
+let aramaBaslangici = 0;
+let secilenMod = oku("duello.mod", "hizli");
 let yenidenDeneme = 0;
 let hicMesajGelmedi = true;
 
@@ -93,12 +96,13 @@ async function profilYenile() {
 // ---------- Ekranlar ----------
 
 function ekranGoster(ad) {
-  for (const ekran of ["yukleniyor", "ad", "lobi", "bekleme", "oyun"]) $(`ekran-${ekran}`).hidden = ekran !== ad;
+  for (const ekran of ["yukleniyor", "ad", "lobi", "arama", "bekleme", "oyun"]) $(`ekran-${ekran}`).hidden = ekran !== ad;
   if (ad !== "oyun") $("geri-sayim-ortu").hidden = true;
 }
 
 function lobiyeDon(mesaj) {
   baglantiyiKapat();
+  aramayiBitir();
   odaKodu = null;
   durum = null;
   oyunAnahtari = null;
@@ -110,10 +114,11 @@ function lobiyeDon(mesaj) {
   if (mesaj) bildir(mesaj, 2500);
 }
 
-async function davetEt(mod, dugme) {
+async function davetEt(dugme) {
+  aramayiBitir();
   dugme.disabled = true;
   try {
-    const { kod } = await istek("/duello", { mod });
+    const { kod } = await istek("/duello", { mod: secilenMod });
     odaKodu = kod;
     const k = YEREL && parametreler.get("k") ? `&k=${parametreler.get("k")}` : "";
     history.replaceState(null, "", `?oda=${kod}${k}`);
@@ -124,6 +129,66 @@ async function davetEt(mod, dugme) {
     dugme.disabled = false;
   }
 }
+
+// ---------- Rastgele rakip ----------
+
+function modSec(mod) {
+  secilenMod = mod;
+  yaz("duello.mod", mod);
+  for (const dugme of document.querySelectorAll("[data-mod]")) {
+    dugme.setAttribute("aria-checked", String(dugme.dataset.mod === mod));
+  }
+}
+
+function rakipAra() {
+  aramaSoketiniKapat();
+  if (!aramaBaslangici) aramaBaslangici = Date.now();
+  ekranGoster("arama");
+  $("arama-mod").textContent = `${MODLAR[secilenMod].ad} mod · ${MODLAR[secilenMod].aciklama}`;
+  const soket = new WebSocket(`${WS_SUNUCU}/eslestir`);
+  aramaSoketi = soket;
+  soket.onopen = () => soket.send(JSON.stringify({ t: "ara", ...kimlik, mod: secilenMod }));
+  soket.onmessage = (olay) => {
+    const mesaj = JSON.parse(olay.data);
+    if (mesaj.t !== "bulundu") return;
+    aramaSoketi = null;
+    aramaBaslangici = 0;
+    odaKodu = mesaj.kod;
+    const k = YEREL && parametreler.get("k") ? `&k=${parametreler.get("k")}` : "";
+    history.replaceState(null, "", `?oda=${odaKodu}${k}`);
+    baglan();
+  };
+  soket.onclose = (olay) => {
+    if (aramaSoketi !== soket) return; // bulundu ya da vazgeçildi
+    aramaSoketi = null;
+    if (olay.code === 4002) return lobiyeDon(olay.reason);
+    if (olay.code === 4000) return lobiyeDon("Başka bir sekmede rakip aranıyor");
+    setTimeout(() => {
+      if (!aramaSoketi && aramaBaslangici) rakipAra();
+    }, 2000);
+  };
+}
+
+// Oyuncu vazgeçti ya da başka bir şeye geçti.
+function aramayiBitir() {
+  aramaBaslangici = 0;
+  aramaSoketiniKapat();
+}
+
+function aramaSoketiniKapat() {
+  if (!aramaSoketi) return;
+  const eski = aramaSoketi;
+  aramaSoketi = null;
+  eski.close();
+}
+
+function aramaSaatiniGuncelle() {
+  if (!aramaBaslangici || $("ekran-arama").hidden) return;
+  const gecen = (Date.now() - aramaBaslangici) / 1000;
+  $("arama-sure").textContent = sureYazisi(gecen);
+  $("arama-oneri").hidden = gecen < 30;
+}
+setInterval(aramaSaatiniGuncelle, 500);
 
 function davetAdresi() {
   return `${DUELLO_ADRESI}?oda=${odaKodu}`;
@@ -165,6 +230,12 @@ function baglan() {
   soket.onclose = (olay) => {
     if (ws !== soket) return; // bilerek kapattık
     ws = null;
+    if (olay.code === 4003) {
+      // Eşleşen rakip odaya gelmedi: aramaya geri dön.
+      odaKodu = null;
+      bildir("Rakip bağlanamadı, yeniden aranıyor…", 2500);
+      return rakipAra();
+    }
     if (olay.code === 4002 || olay.code === 4001) return lobiyeDon(olay.reason || "Oda kapandı");
     if (olay.code === 4000) {
       $("alt-baslik").textContent = "Başka bir sekmede açık";
@@ -249,6 +320,9 @@ function ciz(d) {
     $("alt-baslik").textContent = "";
     $("oda-kodu").textContent = d.kod;
     $("bekleme-mod").textContent = `${MODLAR[d.mod].ad} mod · ${MODLAR[d.mod].aciklama}`;
+    $("bekleme-baslik").textContent = d.eslesme ? "Rakip bulundu, bağlanıyor…" : "Rakibini bekliyorsun";
+    $("davet-alani").hidden = d.eslesme;
+    $("vazgec").hidden = d.eslesme;
     $("davet-adresi").textContent = davetAdresi().replace(/^https?:\/\//, "");
     return;
   }
@@ -546,12 +620,22 @@ async function basla() {
     }
   });
   for (const dugme of document.querySelectorAll("[data-mod]")) {
-    dugme.addEventListener("click", () => davetEt(dugme.dataset.mod, dugme));
+    dugme.addEventListener("click", () => modSec(dugme.dataset.mod));
   }
+  modSec(MODLAR[secilenMod] ? secilenMod : "hizli");
+  $("rakip-bul").addEventListener("click", rakipAra);
+  $("davet-et").addEventListener("click", () => davetEt($("davet-et")));
+  $("aramadan-davet").addEventListener("click", () => davetEt($("aramadan-davet")));
+  $("arama-iptal").addEventListener("click", () => lobiyeDon());
   $("davet-paylas").addEventListener("click", davetiPaylas);
   $("vazgec").addEventListener("click", () => lobiyeDon());
   $("rovans").addEventListener("click", () => gonder({ t: "rovans" }));
-  $("yeni-mac").addEventListener("click", () => lobiyeDon());
+  $("yeni-mac").addEventListener("click", () => {
+    const mod = durum?.mod || secilenMod;
+    lobiyeDon();
+    modSec(mod);
+    rakipAra();
+  });
   $("sonuc-paylas").addEventListener("click", () => paylas(sonucMetni()));
 
   if (!oku("duello.yardim-goruldu", false)) {
