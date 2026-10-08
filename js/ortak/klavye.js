@@ -62,6 +62,7 @@ export function klavyeKur(kap, tusaBasildi) {
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (document.querySelector("dialog[open]")) return;
+    if (e.target.closest && e.target.closest("input, textarea, select")) return; // yazı kutuları (ör. takma ad)
     if (e.key === "Enter") {
       e.preventDefault();
       tusaBasildi("gir");

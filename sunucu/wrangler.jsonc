@@ -1,0 +1,18 @@
+// Harfoni düello sunucusu (Cloudflare Workers).
+// Yerelde denemek: npm run gelistir   Yayınlamak: npm run yayinla
+{
+  "name": "harfoni-sunucu",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": false,
+  "routes": [{ "pattern": "api.harfoni.com", "custom_domain": true }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "ODALAR", "class_name": "DuelloOdasi" },
+      { "name": "OYUNCULAR", "class_name": "Oyuncular" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DuelloOdasi", "Oyuncular"] }],
+  "observability": { "enabled": false },
+  "send_metrics": false
+}

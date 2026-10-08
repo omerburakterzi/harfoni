@@ -1,0 +1,12 @@
+{
+  "name": "harfoni-sunucu",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gelistir": "wrangler dev --port 8787 --ip 0.0.0.0",
+    "yayinla": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

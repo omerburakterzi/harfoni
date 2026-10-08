@@ -1,0 +1,269 @@
+// Bir düello odası: iki oyuncu, aynı gizli kelime, aynı anda oynanır.
+// Kelimeyi daha az tahminde bulan kazanır; eşitse daha erken bulan.
+// Gizli kelimeyi, süreyi ve tahminleri sunucu tutar; böylece kimse
+// rakibinin harflerini ya da cevabı göremez, süreyi uzatamaz.
+//
+// Oyuncular WebSocket ile bağlanır. Her değişiklikte sunucu iki oyuncuya da
+// kendi gözünden oyunun tam halini ("durum" mesajı) gönderir.
+
+import { DurableObject } from "cloudflare:workers";
+import { CEVAPLAR, GECERLI } from "../../js/kelimeler.js";
+import { degerlendir } from "../../js/ortak/degerlendir.js";
+import { anahtarOzeti } from "./ozet.js";
+
+export const HAK = 6;
+export const SURE = 3 * 60 * 1000; // herkesin toplam süresi
+const GERI_SAYIM = 3000; // iki oyuncu gelince başlamadan önce
+const TEMIZLIK = 60 * 60 * 1000; // hareketsiz oda bu kadar sonra silinir
+
+export class DuelloOdasi extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    ctx.blockConcurrencyWhile(async () => {
+      this.oda = (await ctx.storage.get("oda")) || null;
+    });
+  }
+
+  async #kaydet() {
+    await this.ctx.storage.put("oda", this.oda);
+  }
+
+  #oyuncular() {
+    return this.env.OYUNCULAR.get(this.env.OYUNCULAR.idFromName("tum"));
+  }
+
+  // Oda kodu alındığında bir kez çağrılır.
+  async kur(kod) {
+    if (this.oda) return false;
+    this.oda = { kod, durum: "bekliyor", oyuncular: [], tahminler: {}, rovans: [], sonuc: null };
+    await this.#kaydet();
+    await this.ctx.storage.setAlarm(Date.now() + TEMIZLIK);
+    return true;
+  }
+
+  async fetch(istek) {
+    if (istek.headers.get("Upgrade") !== "websocket") return new Response("WebSocket gerekli", { status: 426 });
+    if (!this.oda) return new Response("Oda bulunamadı", { status: 404 });
+    const [istemci, sunucu] = Object.values(new WebSocketPair());
+    this.ctx.acceptWebSocket(sunucu);
+    return new Response(null, { status: 101, webSocket: istemci });
+  }
+
+  async webSocketMessage(ws, veri) {
+    let mesaj;
+    try {
+      mesaj = JSON.parse(veri);
+    } catch {
+      return;
+    }
+    const kim = ws.deserializeAttachment()?.id;
+    if (mesaj.t === "merhaba") return this.#merhaba(ws, mesaj);
+    if (!kim) return;
+    if (mesaj.t === "tahmin") return this.#tahmin(ws, kim, String(mesaj.kelime || ""));
+    if (mesaj.t === "rovans") return this.#rovans(kim);
+  }
+
+  async webSocketClose(ws) {
+    try {
+      ws.close();
+    } catch {
+      // zaten kapalı
+    }
+    this.#yayinla();
+  }
+
+  async webSocketError() {
+    this.#yayinla();
+  }
+
+  async #merhaba(ws, { id, anahtar }) {
+    if (typeof id !== "string" || typeof anahtar !== "string") return this.#hata(ws, "Kimlik eksik", true);
+    const oyuncu = await this.#oyuncular().dogrula(id, await anahtarOzeti(anahtar));
+    if (!oyuncu) return this.#hata(ws, "Kimlik doğrulanamadı", true);
+
+    const oda = this.oda;
+    let uye = oda.oyuncular.find((o) => o.id === id);
+    if (!uye) {
+      if (oda.oyuncular.length >= 2) return this.#hata(ws, "Bu oda dolu", true);
+      uye = { id, ad: oyuncu.ad, puan: oyuncu.puan };
+      oda.oyuncular.push(uye);
+      oda.tahminler[id] = [];
+    }
+
+    // Aynı oyuncunun eski bağlantısı varsa kapat (ör. sayfayı yeniledi).
+    for (const eski of this.ctx.getWebSockets()) {
+      if (eski !== ws && eski.deserializeAttachment()?.id === id) eski.close(4000, "Başka yerden bağlanıldı");
+    }
+    ws.serializeAttachment({ id });
+
+    if (oda.durum === "bekliyor" && oda.oyuncular.length === 2) await this.#baslat();
+    else await this.#kaydet();
+    this.#yayinla();
+  }
+
+  async #baslat() {
+    const oda = this.oda;
+    // TEST_CEVAP sadece yerel denemede (.dev.vars) kullanılır.
+    oda.cevap = this.env.TEST_CEVAP || CEVAPLAR[Math.floor(Math.random() * CEVAPLAR.length)];
+    oda.baslangic = Date.now() + GERI_SAYIM;
+    oda.bitis = oda.baslangic + SURE;
+    oda.durum = "oyun";
+    oda.sonuc = null;
+    oda.rovans = [];
+    oda.bulma = {}; // oyuncu kimliği -> kelimeyi bulduğu an
+    for (const o of oda.oyuncular) oda.tahminler[o.id] = [];
+    await this.#kaydet();
+    await this.ctx.storage.setAlarm(oda.bitis);
+  }
+
+  #oyuncuBitti(id) {
+    const t = this.oda.tahminler[id];
+    return t.length >= HAK || t.includes(this.oda.cevap);
+  }
+
+  async #tahmin(ws, id, kelime) {
+    const oda = this.oda;
+    const simdi = Date.now();
+    if (oda.durum !== "oyun" || !oda.tahminler[id]) return;
+    if (simdi < oda.baslangic) return this.#hata(ws, "Henüz başlamadı");
+    if (simdi >= oda.bitis) return this.#bitir();
+    if (this.#oyuncuBitti(id)) return this.#hata(ws, "Tahmin hakkın bitti");
+    kelime = kelime.toLocaleLowerCase("tr-TR");
+    if ([...kelime].length !== 5) return this.#hata(ws, "Harf sayısı yetersiz");
+    if (!GECERLI.has(kelime)) return this.#hata(ws, "Sözlükte yok");
+
+    oda.tahminler[id].push(kelime);
+    if (kelime === oda.cevap) oda.bulma[id] = simdi;
+    if (this.#sonucBelli()) return this.#bitir();
+    await this.#kaydet();
+    this.#yayinla();
+  }
+
+  // Bulan oyuncunun tahmin sayısı (bulamadıysa null).
+  #bulduguTahmin(id) {
+    const t = this.oda.tahminler[id];
+    return t.includes(this.oda.cevap) ? t.indexOf(this.oda.cevap) + 1 : null;
+  }
+
+  // Oyun daha fazla oynanmadan kazanan belli mi?
+  #sonucBelli() {
+    const [a, b] = this.oda.oyuncular;
+    if (this.#oyuncuBitti(a.id) && this.#oyuncuBitti(b.id)) return true;
+    // Biri n. tahminde bulduysa diğeri ancak n-1 ya da daha az tahminde bularak geçebilir.
+    for (const [bulan, diger] of [[a, b], [b, a]]) {
+      const n = this.#bulduguTahmin(bulan.id);
+      if (n !== null && !this.#oyuncuBitti(diger.id) && this.oda.tahminler[diger.id].length >= n - 1) return true;
+    }
+    return false;
+  }
+
+  // Az tahmin önce gelir, eşitse erken bulan. Kimse bulamadıysa null (berabere).
+  #kazanan() {
+    const [a, b] = this.oda.oyuncular;
+    const na = this.#bulduguTahmin(a.id);
+    const nb = this.#bulduguTahmin(b.id);
+    if (na === null && nb === null) return null;
+    if (nb === null) return a.id;
+    if (na === null) return b.id;
+    if (na !== nb) return na < nb ? a.id : b.id;
+    return this.oda.bulma[a.id] <= this.oda.bulma[b.id] ? a.id : b.id;
+  }
+
+  async #bitir() {
+    const oda = this.oda;
+    if (oda.durum !== "oyun") return;
+    const kazanan = this.#kazanan();
+    oda.durum = "bitti";
+    oda.bitisAni = Math.min(oda.bitis, Date.now());
+    const [a, b] = oda.oyuncular;
+    const sonucA = kazanan === null ? 0.5 : kazanan === a.id ? 1 : 0;
+    const puanlar = await this.#oyuncular().macSonucu(a.id, b.id, sonucA);
+    if (puanlar) for (const o of oda.oyuncular) o.puan = puanlar[o.id].yeni;
+    oda.sonuc = { kazanan, puanlar };
+    await this.#kaydet();
+    await this.ctx.storage.setAlarm(Date.now() + TEMIZLIK);
+    this.#yayinla();
+  }
+
+  async #rovans(id) {
+    const oda = this.oda;
+    if (oda.durum !== "bitti" || oda.rovans.includes(id)) return;
+    oda.rovans.push(id);
+    if (oda.rovans.length === 2) await this.#baslat();
+    else await this.#kaydet();
+    this.#yayinla();
+  }
+
+  async alarm() {
+    const oda = this.oda;
+    if (!oda) return;
+    if (oda.durum === "oyun" && Date.now() >= oda.bitis) return this.#bitir();
+    if (oda.durum !== "oyun") {
+      // Uzun süre hareketsiz kalan odayı temizle.
+      for (const ws of this.ctx.getWebSockets()) ws.close(4001, "Oda kapandı");
+      await this.ctx.storage.deleteAll();
+      this.oda = null;
+    }
+  }
+
+  #hata(ws, mesaj, kapat = false) {
+    ws.send(JSON.stringify({ t: "hata", mesaj }));
+    if (kapat) ws.close(4002, mesaj);
+  }
+
+  // Her oyuncuya kendi gözünden oyunun hali. Rakibin harfleri oyun bitene
+  // kadar gönderilmez, sadece renkleri.
+  #gorunum(id, bagliOlanlar) {
+    const oda = this.oda;
+    const ben = oda.oyuncular.find((o) => o.id === id);
+    const rakip = oda.oyuncular.find((o) => o.id !== id);
+    const bitti = oda.durum === "bitti";
+    const satirlar = (kim, harflerle) =>
+      (oda.tahminler[kim] || []).map((kelime) => ({
+        renkler: degerlendir(kelime, oda.cevap),
+        ...(harflerle ? { kelime } : {}),
+      }));
+
+    return {
+      t: "durum",
+      kod: oda.kod,
+      durum: oda.durum,
+      simdi: Date.now(),
+      baslangic: oda.baslangic,
+      bitis: oda.bitis,
+      bitisAni: oda.bitisAni,
+      hak: HAK,
+      ben: { ad: ben.ad, puan: ben.puan, satirlar: satirlar(id, true) },
+      rakip: rakip && {
+        ad: rakip.ad,
+        puan: rakip.puan,
+        bagli: bagliOlanlar.has(rakip.id),
+        satirlar: satirlar(rakip.id, bitti),
+      },
+      sonuc: bitti && {
+        cevap: oda.cevap,
+        // kelimeyi buldukları süre (ms); bulamayan için null
+        benSure: oda.bulma[id] ? oda.bulma[id] - oda.baslangic : null,
+        rakipSure: rakip && oda.bulma[rakip.id] ? oda.bulma[rakip.id] - oda.baslangic : null,
+        kazanan: oda.sonuc.kazanan === null ? null : oda.sonuc.kazanan === id ? "ben" : "rakip",
+        puan: oda.sonuc.puanlar && oda.sonuc.puanlar[id],
+      },
+      rovans: { ben: oda.rovans.includes(id), rakip: Boolean(rakip && oda.rovans.includes(rakip.id)) },
+    };
+  }
+
+  #yayinla() {
+    if (!this.oda) return;
+    const soketler = this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN);
+    const bagliOlanlar = new Set(soketler.map((ws) => ws.deserializeAttachment()?.id).filter(Boolean));
+    for (const ws of soketler) {
+      const id = ws.deserializeAttachment()?.id;
+      if (!id) continue;
+      try {
+        ws.send(JSON.stringify(this.#gorunum(id, bagliOlanlar)));
+      } catch {
+        // bağlantı tam o sırada kopmuş olabilir
+      }
+    }
+  }
+}

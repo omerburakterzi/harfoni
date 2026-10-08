@@ -671,3 +671,144 @@ input[role="switch"]::after {
 }
 input[role="switch"]:checked { background: var(--dogru); }
 input[role="switch"]:checked::after { transform: translateX(20px); }
+
+/* ---- Düello ---- */
+.duello [hidden], .geri-sayim-ortu[hidden] { display: none !important; }
+.soluk-yazi { color: var(--soluk); }
+
+.duello-ekran {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 24px 20px;
+  text-align: center;
+}
+.duello-ekran h2 { margin: 0 0 4px; font-size: 1.4rem; }
+.duello-ekran p { line-height: 1.5; margin: 6px 0; }
+.duello-ekran .ana-dugme { margin: 14px auto 0; max-width: 280px; width: 100%; flex: none; }
+.duello-ekran .not { margin-top: 20px; }
+
+.ad-formu { display: flex; gap: 8px; margin-top: 10px; }
+.ad-formu input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 2px solid var(--cizgi);
+  border-radius: 999px;
+  background: var(--yuzey);
+  color: var(--yazi);
+  font: inherit;
+  font-size: 1rem;
+}
+.ad-formu input:focus { outline: none; border-color: var(--dogru); }
+.duello-ekran .ad-formu .ana-dugme, .pencere .ad-formu .ana-dugme { margin: 0; flex: none; width: auto; }
+
+.profil-karti {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding: 18px;
+  border: 1px solid var(--cizgi);
+  border-radius: var(--yaricap);
+  background: var(--yuzey);
+}
+.profil-karti strong { font-size: 1.4rem; }
+.profil-karti b { color: var(--dogru); font-size: 1.1rem; }
+
+.davet-kutusu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 16px;
+  border: 2px dashed var(--cizgi-dolu);
+  border-radius: var(--yaricap);
+}
+.oda-kodu { font-size: 2rem; font-weight: 800; letter-spacing: 0.18em; }
+.davet-adresi { font-size: 0.8rem; color: var(--soluk); word-break: break-all; }
+
+.duz-dugme {
+  margin: 10px auto 0;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--soluk);
+  font-weight: 700;
+  cursor: pointer;
+}
+.duz-dugme:hover { background: var(--yumusak); }
+.duz-dugme.tam { display: block; width: 100%; }
+.duz-dugme.tehlike { color: var(--kirmizi); display: block; }
+.pencere-alt .duz-dugme { margin: 0; border: 2px solid var(--cizgi); }
+
+.duello-oyun { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.duello-ust {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 0;
+}
+.rakip-bilgi { min-width: 0; line-height: 1.2; }
+.rakip-ad { display: flex; align-items: center; gap: 6px; }
+.rakip-ad strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rakip-bilgi > span { font-size: 0.8rem; }
+.bagli-isareti { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--cizgi-dolu); }
+.bagli-isareti.bagli { background: var(--dogru); }
+
+.mini-tahta { display: grid; gap: 2px; }
+.mini-satir { display: flex; gap: 2px; }
+.mini-satir i { width: 12px; height: 12px; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--cizgi); }
+.mini-satir i[data-durum] { box-shadow: none; }
+.mini-satir i[data-durum="dogru"] { background: var(--dogru); }
+.mini-satir i[data-durum="var"] { background: var(--var); }
+.mini-satir i[data-durum="yok"] { background: var(--yok); }
+
+.saat {
+  min-width: 72px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--yumusak);
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.saat.az { background: var(--kirmizi); color: #fff; }
+.saat.durdu { opacity: 0.5; }
+
+.geri-sayim-ortu {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 30;
+  background: rgb(0 0 0 / 0.55);
+}
+.geri-sayim-ortu span {
+  font-size: 7rem;
+  font-weight: 800;
+  color: #fff;
+  animation: zipla 1s ease-out infinite;
+}
+
+.puan-degisimi { margin: 8px 0 0; }
+.puan-degisimi .artti { color: var(--dogru); font-weight: 800; }
+.puan-degisimi .azaldi { color: var(--kirmizi); font-weight: 800; }
+.rakip-sonuc { display: grid; gap: 4px; justify-content: start; }
+.rakip-sonuc .kare { font-size: 1.1rem; }
+.rovans-durumu { margin: 14px 0 0; font-weight: 700; color: var(--var); }
+#sonuc-penceresi .pencere-alt .ana-dugme { margin-left: 0; }
+#yeni-mac { margin-top: 10px; }
+
+/* Ana sayfada düello kartı */
+.oyun-karti.duello-karti { border-color: var(--dogru); }
+.sonuc-aciklama { margin: 6px 0 0; color: var(--soluk); }

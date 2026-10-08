@@ -9,7 +9,7 @@ const site = join(burasi, "..");
 const hedef = join(burasi, "www");
 
 const DOSYALAR = [
-  "index.html", "klasik.html", "palavra.html", "arada.html", "muamma.html",
+  "index.html", "klasik.html", "palavra.html", "arada.html", "muamma.html", "duello.html",
   "hakkinda.html", "gizlilik.html", "manifest.webmanifest",
   "css", "js", "gorseller",
 ];
