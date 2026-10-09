@@ -1,7 +1,7 @@
 // Google ile giriş düğmesi (sadece web sitesinde; uygulamalarda telefonun
 // kendi giriş ekranı kullanılacak). Google'ın kodu sadece gerekince yüklenir.
 
-const GOOGLE_WEB_ISTEMCI = "658158319640-i6ac6hvfb9a6mbg5qlgsijj6475e5b3p.apps.googleusercontent.com";
+const GOOGLE_WEB_ISTEMCI = "658158319640-0qvddsgfujedsivtrp2gdg5bo3mjao5d.apps.googleusercontent.com";
 
 export const webGirisVar = !window.Capacitor;
 

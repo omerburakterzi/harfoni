@@ -6,10 +6,10 @@ const SAGLAYICILAR = {
   google: {
     anahtarlar: "https://www.googleapis.com/oauth2/v3/certs",
     yayincilar: ["accounts.google.com", "https://accounts.google.com"],
-    // Web, iOS ve Android uygulamalarının istemci kimlikleri (gizli değil).
+    // İstemci kimlikleri (gizli değil). Android de web kimliğini kullanır.
     kitle: [
-      "658158319640-i6ac6hvfb9a6mbg5qlgsijj6475e5b3p.apps.googleusercontent.com",
-      "658158319640-0qvddsgfujedsivtrp2gdg5bo3mjao5d.apps.googleusercontent.com",
+      "658158319640-0qvddsgfujedsivtrp2gdg5bo3mjao5d.apps.googleusercontent.com", // web
+      "658158319640-i6ac6hvfb9a6mbg5qlgsijj6475e5b3p.apps.googleusercontent.com", // iOS
     ],
   },
   apple: {
