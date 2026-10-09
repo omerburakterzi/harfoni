@@ -58,6 +58,10 @@
         <input id="ad-girisi" name="ad" type="text" maxlength="16" autocomplete="nickname" placeholder="Takma ad" required>
         <button class="ana-dugme" type="submit">Devam</button>
       </form>
+      <div id="ad-giris" class="hesap-girisi" hidden>
+        <p class="soluk-yazi">Daha önce oynadın ve Google hesabını bağladın mı?</p>
+        <div id="ad-google" class="google-kap"></div>
+      </div>
       <p class="not">Adın ve düello puanın sunucumuzda saklanır; istediğin zaman profilinden silebilirsin. Devam ederek <a href="kurallar.html">Düello kurallarını</a> kabul etmiş olursun: kaba ad, hakaret ve hile yasak.</p>
     </section>
 
@@ -232,6 +236,17 @@
       <input id="profil-ad" type="text" maxlength="16" autocomplete="nickname" required>
       <button class="ana-dugme" type="submit">Kaydet</button>
     </form>
+    <div id="hesap-bolumu" hidden>
+      <h3>Hesap</h3>
+      <div id="hesap-bagli" hidden>
+        <p class="hesap-durumu">✓ Profilin Google hesabına bağlı. Başka bir cihazda "Google ile devam et" diyerek puanlarınla devam edebilirsin.</p>
+        <button id="hesap-kaldir" class="duz-dugme" type="button">Google bağını kaldır</button>
+      </div>
+      <div id="hesap-bagli-degil" hidden>
+        <p class="aciklama">Telefon değiştirsen ya da uygulamayı silsen de puanlarını kaybetme: profilini Google hesabına bağla. E-posta adresin saklanmaz.</p>
+        <div id="profil-google" class="google-kap"></div>
+      </div>
+    </div>
     <h3>Engellediklerin</h3>
     <div id="engel-listesi" class="engel-listesi"><p class="soluk-yazi">Kimseyi engellemedin.</p></div>
     <p class="not">Sunucumuzda sadece takma adın, puanın ve maç sayıların saklanır; seni cihazında üretilen rastgele bir kimlik tanır. <a href="gizlilik.html">Gizlilik</a></p>

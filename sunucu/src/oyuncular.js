@@ -79,6 +79,22 @@ export class Oyuncular extends DurableObject {
       sayi INTEGER NOT NULL,
       PRIMARY KEY (a, b, gun)
     )`);
+    // Google/Apple hesabıyla bağlanmış profiller. Sadece hizmetin verdiği
+    // değişmez numara (sub) tutulur; e-posta ya da isim tutulmaz.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS hesap (
+      saglayici TEXT NOT NULL,
+      sub TEXT NOT NULL,
+      oyuncu TEXT NOT NULL,
+      zaman INTEGER NOT NULL,
+      PRIMARY KEY (saglayici, sub)
+    )`);
+    // Hesapla giriş yapılan her yeni cihazın kendi gizli anahtarı (özeti)
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS cihaz (
+      oyuncu TEXT NOT NULL,
+      anahtar TEXT NOT NULL,
+      zaman INTEGER NOT NULL,
+      PRIMARY KEY (oyuncu, anahtar)
+    )`);
     // Kurallara uymayan oyuncu Düello'dan uzaklaştırılabilir.
     const sutunlar = this.sql.exec("PRAGMA table_info(oyuncu)").toArray().map((s) => s.name);
     if (!sutunlar.includes("yasakli")) this.sql.exec("ALTER TABLE oyuncu ADD COLUMN yasakli INTEGER NOT NULL DEFAULT 0");
@@ -104,12 +120,42 @@ export class Oyuncular extends DurableObject {
   }
 
   // Anahtar doğruysa oyuncunun adını ve her moddaki puanını döner.
+  // İlk cihazın anahtarı oyuncu tablosunda, hesapla giriş yapılan diğer
+  // cihazlarınki cihaz tablosunda.
+  #anahtarDogruMu(oyuncu, anahtar) {
+    if (oyuncu.anahtar === anahtar) return true;
+    return this.sql.exec("SELECT 1 FROM cihaz WHERE oyuncu = ? AND anahtar = ?", oyuncu.id, anahtar).toArray().length > 0;
+  }
+
   dogrula(id, anahtar) {
     const oyuncu = this.#bul(id);
-    if (!oyuncu || oyuncu.anahtar !== anahtar) return null;
+    if (!oyuncu || !this.#anahtarDogruMu(oyuncu, anahtar)) return null;
     const puanlar = {};
     for (const mod of MOD_ADLARI) puanlar[mod] = this.#derece(id, mod);
-    return { id, ad: oyuncu.ad, puanlar, yasakli: Boolean(oyuncu.yasakli) };
+    const hesaplar = this.sql.exec("SELECT saglayici FROM hesap WHERE oyuncu = ?", id).toArray().map((h) => h.saglayici);
+    return { id, ad: oyuncu.ad, puanlar, hesaplar, yasakli: Boolean(oyuncu.yasakli) };
+  }
+
+  // Google/Apple ile giriş. Hesap bir profile bağlıysa o profil için bu
+  // cihaza yeni bir anahtar tanımlanır ({ id, yeniCihaz: true }). Bağlı değilse
+  // ve cihazdaki profil geçerliyse hesap ona bağlanır. İkisi de değilse null.
+  hesapGirisi(saglayici, sub, id, anahtar, yeniAnahtar) {
+    const bagli = this.sql.exec("SELECT oyuncu FROM hesap WHERE saglayici = ? AND sub = ?", saglayici, sub).toArray()[0];
+    if (bagli && this.#bul(bagli.oyuncu)) {
+      if (bagli.oyuncu === id && this.dogrula(id, anahtar)) return { id, yeniCihaz: false };
+      this.sql.exec("INSERT OR IGNORE INTO cihaz (oyuncu, anahtar, zaman) VALUES (?, ?, ?)", bagli.oyuncu, yeniAnahtar, Date.now());
+      return { id: bagli.oyuncu, yeniCihaz: true };
+    }
+    if (!this.dogrula(id, anahtar)) return null;
+    this.sql.exec("DELETE FROM hesap WHERE oyuncu = ? AND saglayici = ?", id, saglayici); // aynı türden eski bağ
+    this.sql.exec("INSERT OR REPLACE INTO hesap (saglayici, sub, oyuncu, zaman) VALUES (?, ?, ?, ?)", saglayici, sub, id, Date.now());
+    return { id, yeniCihaz: false };
+  }
+
+  hesapBaginiKaldir(id, anahtar, saglayici) {
+    if (!this.dogrula(id, anahtar)) return false;
+    this.sql.exec("DELETE FROM hesap WHERE oyuncu = ? AND saglayici = ?", id, saglayici);
+    return true;
   }
 
   // İlk kez görülen kimliği kaydeder, tanınan kimliğin adını günceller.
@@ -120,7 +166,7 @@ export class Oyuncular extends DurableObject {
         "INSERT INTO oyuncu (id, anahtar, ad, puan, olusturma) VALUES (?, ?, ?, ?, ?)",
         id, anahtar, ad, BASLANGIC_PUANI, Date.now()
       );
-    } else if (oyuncu.anahtar !== anahtar) {
+    } else if (!this.#anahtarDogruMu(oyuncu, anahtar)) {
       return null;
     } else if (ad && ad !== oyuncu.ad) {
       this.sql.exec("UPDATE oyuncu SET ad = ? WHERE id = ?", ad, id);
@@ -133,6 +179,8 @@ export class Oyuncular extends DurableObject {
     this.sql.exec("DELETE FROM derece WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM engel WHERE engelleyen = ? OR engellenen = ?", id, id);
     this.sql.exec("DELETE FROM esli_mac WHERE a = ? OR b = ?", id, id);
+    this.sql.exec("DELETE FROM hesap WHERE oyuncu = ?", id);
+    this.sql.exec("DELETE FROM cihaz WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM sikayet WHERE sikayetci = ? OR hedef = ?", id, id);
     this.sql.exec("DELETE FROM oyuncu WHERE id = ?", id);
     return true;

@@ -8,11 +8,14 @@
 //   GET  /eslestir        (WebSocket)          rastgele rakip ara
 //   POST /oyuncu/engeller { id, anahtar }      engellediğin kişiler
 //   POST /oyuncu/engel-kaldir { id, anahtar, no }
+//   POST /giris           { id, anahtar, saglayici, jeton }  Google/Apple ile bağla ya da giriş yap
+//   POST /giris/kaldir    { id, anahtar, saglayici }         hesap bağını kaldır
 //   GET  /yonetim                              şikâyetleri inceleme sayfası
 
 import { anahtarOzeti } from "./ozet.js";
 import { odaAc } from "./kod.js";
 import { YONETIM_SAYFASI, yetkiliMi } from "./yonetim.js";
+import { jetonuDogrula } from "./giris.js";
 
 export { DuelloOdasi } from "./oda.js";
 export { Oyuncular } from "./oyuncular.js";
@@ -138,6 +141,20 @@ export default {
     if (url.pathname === "/oyuncu/bilgi") {
       const oyuncu = await oyuncular.dogrula(id, ozet);
       return oyuncu ? cevap(oyuncu, kaynak) : cevap({ hata: "Oyuncu bulunamadı" }, kaynak, 404);
+    }
+    if (url.pathname === "/giris") {
+      const kimlik = await jetonuDogrula(govde.saglayici, govde.jeton);
+      if (!kimlik) return cevap({ hata: "Giriş doğrulanamadı, tekrar dene" }, kaynak, 401);
+      // Başka bir profile giriş yapılırsa bu cihaz için yeni anahtar üretilir.
+      const yeniAnahtar = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const sonuc = await oyuncular.hesapGirisi(govde.saglayici, kimlik.sub, id, ozet, await anahtarOzeti(yeniAnahtar));
+      if (!sonuc) return cevap({ hata: "Bu hesaba bağlı bir profil yok. Önce takma adını seç, sonra profilinden bağla." }, kaynak, 404);
+      const yeniKimlik = sonuc.yeniCihaz ? { id: sonuc.id, anahtar: yeniAnahtar } : { id, anahtar };
+      const profil = await oyuncular.dogrula(yeniKimlik.id, await anahtarOzeti(yeniKimlik.anahtar));
+      return cevap({ kimlik: sonuc.yeniCihaz ? yeniKimlik : null, profil }, kaynak);
+    }
+    if (url.pathname === "/giris/kaldir") {
+      return cevap({ tamam: await oyuncular.hesapBaginiKaldir(id, ozet, govde.saglayici) }, kaynak);
     }
     if (url.pathname === "/oyuncu/engeller") {
       const liste = await oyuncular.engeller(id, ozet);

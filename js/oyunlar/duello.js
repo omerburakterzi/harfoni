@@ -9,6 +9,7 @@ import { oku, yaz } from "../ortak/depo.js";
 import { klavyeKur } from "../ortak/klavye.js";
 import { bildir, pencereAc, pencereleriBagla, paylas } from "../ortak/arayuz.js";
 import { YEREL, WS_SUNUCU, DUELLO_ADRESI, istek } from "../ortak/sunucu.js";
+import { webGirisVar, googleDugmesi } from "../ortak/giris.js";
 
 const UZUNLUK = 5;
 const CEVIRME_ARASI = 280;
@@ -79,6 +80,7 @@ function profiliGoster() {
     $(`profil-beraberlik-${mod}`).textContent = p.beraberlik;
   }
   $("profil-ad").value = profil.ad;
+  hesapBolumunuGoster();
 }
 
 async function adKaydet(ad) {
@@ -94,6 +96,41 @@ async function profilYenile() {
   } catch {
     // önemli değil; bir sonraki seferde yenilenir
   }
+}
+
+// ---------- Google ile giriş ----------
+
+// Profil penceresinde bağlama, ad ekranında giriş için aynı istek.
+async function googleIleGiris(jeton, adEkranindan) {
+  try {
+    const sonuc = await istek("/giris", { ...kimlik, saglayici: "google", jeton });
+    if (sonuc.kimlik) {
+      // Bu Google hesabı başka bir profile bağlı: o profille devam et.
+      kimlik = sonuc.kimlik;
+      yaz(KIMLIK_ANAHTARI, kimlik);
+      bildir(`Hoş geldin ${sonuc.profil.ad}! Profilin geri yüklendi.`, 3000);
+    } else {
+      bildir("Profilin Google hesabına bağlandı", 2500);
+    }
+    profil = sonuc.profil;
+    yaz(KIMLIK_ANAHTARI + ".ad", profil.ad);
+    profiliGoster();
+    if (adEkranindan) {
+      if (odaKodu) baglan();
+      else ekranGoster("lobi");
+    }
+  } catch (hata) {
+    bildir(hata.message, 4000);
+  }
+}
+
+function hesapBolumunuGoster() {
+  $("hesap-bolumu").hidden = !webGirisVar || !profil;
+  if (!webGirisVar || !profil) return;
+  const bagli = profil.hesaplar?.includes("google");
+  $("hesap-bagli").hidden = !bagli;
+  $("hesap-bagli-degil").hidden = bagli;
+  if (!bagli) googleDugmesi($("profil-google"), (jeton) => googleIleGiris(jeton, false)).catch(() => {});
 }
 
 // ---------- Ekranlar ----------
@@ -681,6 +718,11 @@ async function basla() {
     if (!confirm(`${durum.rakip.ad} engellensin mi? Bir daha eşleşmeyeceksiniz.`)) return;
     if (gonder({ t: "engelle" })) $("rakip-penceresi").close();
   });
+  $("hesap-kaldir").addEventListener("click", async () => {
+    if (!confirm("Google bağı kaldırılsın mı? Telefonunu değiştirirsen puanlarını geri getiremezsin.")) return;
+    await istek("/giris/kaldir", { ...kimlik, saglayici: "google" }).catch(() => {});
+    await profilYenile();
+  });
   $("profil-ac").addEventListener("click", () => {
     profilYenile();
     engelleriGoster();
@@ -744,6 +786,10 @@ async function basla() {
 
   if (!profil) {
     $("ad-girisi").value = oku(KIMLIK_ANAHTARI + ".ad", "") || "";
+    if (webGirisVar) {
+      $("ad-giris").hidden = false;
+      googleDugmesi($("ad-google"), (jeton) => googleIleGiris(jeton, true)).catch(() => ($("ad-giris").hidden = true));
+    }
     return ekranGoster("ad");
   }
   if (odaKodu) baglan();
