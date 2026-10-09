@@ -9,7 +9,7 @@ import { oku, yaz } from "../ortak/depo.js";
 import { klavyeKur } from "../ortak/klavye.js";
 import { bildir, pencereAc, pencereleriBagla, paylas } from "../ortak/arayuz.js";
 import { YEREL, WS_SUNUCU, DUELLO_ADRESI, istek } from "../ortak/sunucu.js";
-import { webGirisVar, googleDugmesi, appleDugmesi } from "../ortak/giris.js";
+import { girisSaglayicilari, girisDugmesi } from "../ortak/giris.js";
 
 const UZUNLUK = 5;
 const CEVIRME_ARASI = 280;
@@ -128,8 +128,8 @@ async function hesapIleGiris(saglayici, bilgi, adEkranindan) {
 }
 
 function hesapBolumunuGoster() {
-  $("hesap-bolumu").hidden = !webGirisVar || !profil;
-  if (!webGirisVar || !profil) return;
+  $("hesap-bolumu").hidden = !profil;
+  if (!profil) return;
   const hesaplar = profil.hesaplar || [];
   $("hesap-aciklama").textContent = hesaplar.length
     ? "Başka bir cihazda aynı hesapla giriş yaparak puanlarınla devam edebilirsin."
@@ -137,13 +137,14 @@ function hesapBolumunuGoster() {
   for (const saglayici of ["google", "apple"]) {
     const satir = $(`hesap-${saglayici}`);
     const bagli = hesaplar.includes(saglayici);
+    // Bu cihazda o giriş yoksa (ör. Android'de Apple) sadece bağlıysa göster.
+    satir.hidden = !bagli && !girisSaglayicilari.includes(saglayici);
     satir.querySelector(".hesap-durumu").hidden = !bagli;
     satir.querySelector(".hesap-kaldir").hidden = !bagli;
     const kap = $(`profil-${saglayici}`);
     kap.hidden = bagli;
     if (bagli) continue;
-    if (saglayici === "google") googleDugmesi(kap, (jeton) => hesapIleGiris("google", { jeton }, false)).catch(() => {});
-    else appleDugmesi(kap, (bilgi) => hesapIleGiris("apple", bilgi, false));
+    girisDugmesi(saglayici, kap, (bilgi) => hesapIleGiris(saglayici, bilgi, false)).catch(() => {});
   }
 }
 
@@ -697,6 +698,12 @@ async function engelleriGoster() {
 
 async function basla() {
   pencereleriBagla();
+  // iPhone'da Apple ile giriş önce gelir.
+  if (girisSaglayicilari[0] === "apple") {
+    for (const [apple, google] of [["ad-apple", "ad-google"], ["hesap-apple", "hesap-google"]]) {
+      $(google).before($(apple));
+    }
+  }
   kimlik = kimlikAl();
   odaKodu = parametreler.get("oda")?.toUpperCase() || null;
 
@@ -803,10 +810,9 @@ async function basla() {
 
   if (!profil) {
     $("ad-girisi").value = oku(KIMLIK_ANAHTARI + ".ad", "") || "";
-    if (webGirisVar) {
-      $("ad-giris").hidden = false;
-      googleDugmesi($("ad-google"), (jeton) => hesapIleGiris("google", { jeton }, true)).catch(() => {});
-      appleDugmesi($("ad-apple"), (bilgi) => hesapIleGiris("apple", bilgi, true));
+    $("ad-giris").hidden = false;
+    for (const saglayici of ["google", "apple"]) {
+      girisDugmesi(saglayici, $(`ad-${saglayici}`), (bilgi) => hesapIleGiris(saglayici, bilgi, true)).catch(() => {});
     }
     return ekranGoster("ad");
   }

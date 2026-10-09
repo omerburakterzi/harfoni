@@ -4,7 +4,7 @@
 // hemen görünür), gelen dosya önbelleğe de yazılır. İnternet yoksa önbellekteki
 // son sürüm kullanılır.
 
-const ONBELLEK = "harfoni-v9";
+const ONBELLEK = "harfoni-v10";
 
 // İlk kurulumda önbelleğe alınanlar; oyunlar internetsiz de açılabilsin.
 const DOSYALAR = [
@@ -18,6 +18,7 @@ const DOSYALAR = [
   "hakkinda.html",
   "gizlilik.html",
   "kurallar.html",
+  "hesap-silme.html",
   "css/ortak.css",
   "js/kelimeler.js",
   "js/olcum.js",

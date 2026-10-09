@@ -10,6 +10,15 @@
   "plugins": {
     "LocalNotifications": {
       "iconColor": "#17a398"
+    },
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "facebook": false,
+        "apple": true,
+        "twitter": false
+      },
+      "logLevel": 1
     }
   }
 }
