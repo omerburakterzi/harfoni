@@ -59,8 +59,9 @@
         <button class="ana-dugme" type="submit">Devam</button>
       </form>
       <div id="ad-giris" class="hesap-girisi" hidden>
-        <p class="soluk-yazi">Daha önce oynadın ve Google hesabını bağladın mı?</p>
+        <p class="soluk-yazi">Daha önce oynadın ve profilini bağladın mı?</p>
         <div id="ad-google" class="google-kap"></div>
+        <div id="ad-apple" class="google-kap"></div>
       </div>
       <p class="not">Adın ve düello puanın sunucumuzda saklanır; istediğin zaman profilinden silebilirsin. Devam ederek <a href="kurallar.html">Düello kurallarını</a> kabul etmiş olursun: kaba ad, hakaret ve hile yasak.</p>
     </section>
@@ -238,13 +239,16 @@
     </form>
     <div id="hesap-bolumu" hidden>
       <h3>Hesap</h3>
-      <div id="hesap-bagli" hidden>
-        <p class="hesap-durumu">✓ Profilin Google hesabına bağlı. Başka bir cihazda "Google ile devam et" diyerek puanlarınla devam edebilirsin.</p>
-        <button id="hesap-kaldir" class="duz-dugme" type="button">Google bağını kaldır</button>
-      </div>
-      <div id="hesap-bagli-degil" hidden>
-        <p class="aciklama">Telefon değiştirsen ya da uygulamayı silsen de puanlarını kaybetme: profilini Google hesabına bağla. E-posta adresin saklanmaz.</p>
+      <p id="hesap-aciklama" class="aciklama"></p>
+      <div id="hesap-google" class="hesap-satiri">
+        <span class="hesap-durumu" hidden>✓ Google hesabına bağlı</span>
+        <button class="duz-dugme hesap-kaldir" type="button" data-saglayici="google" hidden>Bağı kaldır</button>
         <div id="profil-google" class="google-kap"></div>
+      </div>
+      <div id="hesap-apple" class="hesap-satiri">
+        <span class="hesap-durumu" hidden>✓ Apple hesabına bağlı</span>
+        <button class="duz-dugme hesap-kaldir" type="button" data-saglayici="apple" hidden>Bağı kaldır</button>
+        <div id="profil-apple" class="google-kap"></div>
       </div>
     </div>
     <h3>Engellediklerin</h3>

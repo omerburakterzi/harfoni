@@ -895,4 +895,23 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
 .hesap-girisi p { margin: 0; font-size: 0.88rem; }
 .google-kap { min-height: 44px; display: flex; justify-content: center; }
 .hesap-durumu { margin: 0 0 8px; font-size: 0.9rem; color: var(--dogru); font-weight: 600; }
-#hesap-kaldir { margin: 0; padding: 6px 12px; font-size: 0.85rem; }
+.hesap-satiri { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.hesap-satiri .google-kap { flex: 1; }
+.hesap-satiri .hesap-durumu { margin: 0; }
+.hesap-kaldir { margin: 0; padding: 6px 12px; font-size: 0.85rem; }
+.apple-dugmesi {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 260px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (prefers-color-scheme: dark) { .apple-dugmesi { background: #fff; color: #000; } }

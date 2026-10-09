@@ -88,6 +88,12 @@ export class Oyuncular extends DurableObject {
       zaman INTEGER NOT NULL,
       PRIMARY KEY (saglayici, sub)
     )`);
+    // Apple: profil silinince bağı kaldırabilmek için yenileme jetonu
+    const hesapSutunlari = this.sql.exec("PRAGMA table_info(hesap)").toArray().map((s) => s.name);
+    if (!hesapSutunlari.includes("yenileme")) {
+      this.sql.exec("ALTER TABLE hesap ADD COLUMN yenileme TEXT");
+      this.sql.exec("ALTER TABLE hesap ADD COLUMN istemci TEXT");
+    }
     // Hesapla giriş yapılan her yeni cihazın kendi gizli anahtarı (özeti)
     this.sql.exec(`CREATE TABLE IF NOT EXISTS cihaz (
       oyuncu TEXT NOT NULL,
@@ -139,8 +145,12 @@ export class Oyuncular extends DurableObject {
   // Google/Apple ile giriş. Hesap bir profile bağlıysa o profil için bu
   // cihaza yeni bir anahtar tanımlanır ({ id, yeniCihaz: true }). Bağlı değilse
   // ve cihazdaki profil geçerliyse hesap ona bağlanır. İkisi de değilse null.
-  hesapGirisi(saglayici, sub, id, anahtar, yeniAnahtar) {
+  // ek: { yenileme, istemci } (Apple için, varsa)
+  hesapGirisi(saglayici, sub, id, anahtar, yeniAnahtar, ek = {}) {
     const bagli = this.sql.exec("SELECT oyuncu FROM hesap WHERE saglayici = ? AND sub = ?", saglayici, sub).toArray()[0];
+    if (bagli && ek.yenileme) {
+      this.sql.exec("UPDATE hesap SET yenileme = ?, istemci = ? WHERE saglayici = ? AND sub = ?", ek.yenileme, ek.istemci, saglayici, sub);
+    }
     if (bagli && this.#bul(bagli.oyuncu)) {
       if (bagli.oyuncu === id && this.dogrula(id, anahtar)) return { id, yeniCihaz: false };
       this.sql.exec("INSERT OR IGNORE INTO cihaz (oyuncu, anahtar, zaman) VALUES (?, ?, ?)", bagli.oyuncu, yeniAnahtar, Date.now());
@@ -148,14 +158,25 @@ export class Oyuncular extends DurableObject {
     }
     if (!this.dogrula(id, anahtar)) return null;
     this.sql.exec("DELETE FROM hesap WHERE oyuncu = ? AND saglayici = ?", id, saglayici); // aynı türden eski bağ
-    this.sql.exec("INSERT OR REPLACE INTO hesap (saglayici, sub, oyuncu, zaman) VALUES (?, ?, ?, ?)", saglayici, sub, id, Date.now());
+    this.sql.exec(
+      "INSERT OR REPLACE INTO hesap (saglayici, sub, oyuncu, zaman, yenileme, istemci) VALUES (?, ?, ?, ?, ?, ?)",
+      saglayici, sub, id, Date.now(), ek.yenileme || null, ek.istemci || null
+    );
     return { id, yeniCihaz: false };
   }
 
+  // Kaldırılan bağların Apple jetonlarını döner (Apple'a da bildirmek için).
   hesapBaginiKaldir(id, anahtar, saglayici) {
-    if (!this.dogrula(id, anahtar)) return false;
+    if (!this.dogrula(id, anahtar)) return null;
+    const jetonlar = this.#appleJetonlari(id, saglayici);
     this.sql.exec("DELETE FROM hesap WHERE oyuncu = ? AND saglayici = ?", id, saglayici);
-    return true;
+    return jetonlar;
+  }
+
+  #appleJetonlari(id, saglayici = "apple") {
+    return this.sql
+      .exec("SELECT yenileme, istemci FROM hesap WHERE oyuncu = ? AND saglayici = ? AND yenileme IS NOT NULL", id, saglayici)
+      .toArray();
   }
 
   // İlk kez görülen kimliği kaydeder, tanınan kimliğin adını günceller.
@@ -174,8 +195,10 @@ export class Oyuncular extends DurableObject {
     return this.dogrula(id, anahtar);
   }
 
+  // Silinen profilin Apple jetonlarını döner ya da kimlik yanlışsa null.
   sil(id, anahtar) {
-    if (!this.dogrula(id, anahtar)) return false;
+    if (!this.dogrula(id, anahtar)) return null;
+    const jetonlar = this.#appleJetonlari(id);
     this.sql.exec("DELETE FROM derece WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM engel WHERE engelleyen = ? OR engellenen = ?", id, id);
     this.sql.exec("DELETE FROM esli_mac WHERE a = ? OR b = ?", id, id);
@@ -183,7 +206,7 @@ export class Oyuncular extends DurableObject {
     this.sql.exec("DELETE FROM cihaz WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM sikayet WHERE sikayetci = ? OR hedef = ?", id, id);
     this.sql.exec("DELETE FROM oyuncu WHERE id = ?", id);
-    return true;
+    return jetonlar;
   }
 
   // Maç bitince iki oyuncunun o moddaki puanını birlikte günceller.

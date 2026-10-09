@@ -8,7 +8,7 @@
 //   GET  /eslestir        (WebSocket)          rastgele rakip ara
 //   POST /oyuncu/engeller { id, anahtar }      engellediğin kişiler
 //   POST /oyuncu/engel-kaldir { id, anahtar, no }
-//   POST /giris           { id, anahtar, saglayici, jeton }  Google/Apple ile bağla ya da giriş yap
+//   POST /giris           { id, anahtar, saglayici, jeton, kod?, istemci? }  Google/Apple ile bağla ya da giriş yap
 //   POST /giris/kaldir    { id, anahtar, saglayici }         hesap bağını kaldır
 //   GET  /yonetim                              şikâyetleri inceleme sayfası
 
@@ -16,6 +16,7 @@ import { anahtarOzeti } from "./ozet.js";
 import { odaAc } from "./kod.js";
 import { YONETIM_SAYFASI, yetkiliMi } from "./yonetim.js";
 import { jetonuDogrula } from "./giris.js";
+import { yenilemeJetonuAl, bagiKaldir } from "./apple.js";
 
 export { DuelloOdasi } from "./oda.js";
 export { Oyuncular } from "./oyuncular.js";
@@ -147,14 +148,22 @@ export default {
       if (!kimlik) return cevap({ hata: "Giriş doğrulanamadı, tekrar dene" }, kaynak, 401);
       // Başka bir profile giriş yapılırsa bu cihaz için yeni anahtar üretilir.
       const yeniAnahtar = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
-      const sonuc = await oyuncular.hesapGirisi(govde.saglayici, kimlik.sub, id, ozet, await anahtarOzeti(yeniAnahtar));
+      // Apple: bağı sonradan kaldırabilmek için yenileme jetonu al.
+      const ek = {};
+      if (govde.saglayici === "apple" && govde.kod) {
+        ek.istemci = govde.istemci === "com.harfoni.app" ? "com.harfoni.app" : "com.harfoni.web";
+        ek.yenileme = await yenilemeJetonuAl(env, ek.istemci, govde.kod);
+      }
+      const sonuc = await oyuncular.hesapGirisi(govde.saglayici, kimlik.sub, id, ozet, await anahtarOzeti(yeniAnahtar), ek);
       if (!sonuc) return cevap({ hata: "Bu hesaba bağlı bir profil yok. Önce takma adını seç, sonra profilinden bağla." }, kaynak, 404);
       const yeniKimlik = sonuc.yeniCihaz ? { id: sonuc.id, anahtar: yeniAnahtar } : { id, anahtar };
       const profil = await oyuncular.dogrula(yeniKimlik.id, await anahtarOzeti(yeniKimlik.anahtar));
       return cevap({ kimlik: sonuc.yeniCihaz ? yeniKimlik : null, profil }, kaynak);
     }
     if (url.pathname === "/giris/kaldir") {
-      return cevap({ tamam: await oyuncular.hesapBaginiKaldir(id, ozet, govde.saglayici) }, kaynak);
+      const jetonlar = await oyuncular.hesapBaginiKaldir(id, ozet, govde.saglayici);
+      for (const j of jetonlar || []) await bagiKaldir(env, j.istemci, j.yenileme);
+      return cevap({ tamam: Boolean(jetonlar) }, kaynak);
     }
     if (url.pathname === "/oyuncu/engeller") {
       const liste = await oyuncular.engeller(id, ozet);
@@ -164,7 +173,9 @@ export default {
       return cevap({ tamam: await oyuncular.engelKaldir(id, ozet, Number(govde.no)) }, kaynak);
     }
     if (url.pathname === "/oyuncu/sil") {
-      return cevap({ silindi: await oyuncular.sil(id, ozet) }, kaynak);
+      const jetonlar = await oyuncular.sil(id, ozet);
+      for (const j of jetonlar || []) await bagiKaldir(env, j.istemci, j.yenileme);
+      return cevap({ silindi: Boolean(jetonlar) }, kaynak);
     }
     return cevap({ hata: "Bulunamadı" }, kaynak, 404);
   },

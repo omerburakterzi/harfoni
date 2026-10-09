@@ -9,7 +9,7 @@ import { oku, yaz } from "../ortak/depo.js";
 import { klavyeKur } from "../ortak/klavye.js";
 import { bildir, pencereAc, pencereleriBagla, paylas } from "../ortak/arayuz.js";
 import { YEREL, WS_SUNUCU, DUELLO_ADRESI, istek } from "../ortak/sunucu.js";
-import { webGirisVar, googleDugmesi } from "../ortak/giris.js";
+import { webGirisVar, googleDugmesi, appleDugmesi } from "../ortak/giris.js";
 
 const UZUNLUK = 5;
 const CEVIRME_ARASI = 280;
@@ -100,17 +100,20 @@ async function profilYenile() {
 
 // ---------- Google ile giriş ----------
 
+const SAGLAYICI_ADI = { google: "Google", apple: "Apple" };
+
 // Profil penceresinde bağlama, ad ekranında giriş için aynı istek.
-async function googleIleGiris(jeton, adEkranindan) {
+// bilgi: { jeton, kod?, istemci? }
+async function hesapIleGiris(saglayici, bilgi, adEkranindan) {
   try {
-    const sonuc = await istek("/giris", { ...kimlik, saglayici: "google", jeton });
+    const sonuc = await istek("/giris", { ...kimlik, saglayici, ...bilgi });
     if (sonuc.kimlik) {
       // Bu Google hesabı başka bir profile bağlı: o profille devam et.
       kimlik = sonuc.kimlik;
       yaz(KIMLIK_ANAHTARI, kimlik);
       bildir(`Hoş geldin ${sonuc.profil.ad}! Profilin geri yüklendi.`, 3000);
     } else {
-      bildir("Profilin Google hesabına bağlandı", 2500);
+      bildir(`Profilin ${SAGLAYICI_ADI[saglayici]} hesabına bağlandı`, 2500);
     }
     profil = sonuc.profil;
     yaz(KIMLIK_ANAHTARI + ".ad", profil.ad);
@@ -127,10 +130,21 @@ async function googleIleGiris(jeton, adEkranindan) {
 function hesapBolumunuGoster() {
   $("hesap-bolumu").hidden = !webGirisVar || !profil;
   if (!webGirisVar || !profil) return;
-  const bagli = profil.hesaplar?.includes("google");
-  $("hesap-bagli").hidden = !bagli;
-  $("hesap-bagli-degil").hidden = bagli;
-  if (!bagli) googleDugmesi($("profil-google"), (jeton) => googleIleGiris(jeton, false)).catch(() => {});
+  const hesaplar = profil.hesaplar || [];
+  $("hesap-aciklama").textContent = hesaplar.length
+    ? "Başka bir cihazda aynı hesapla giriş yaparak puanlarınla devam edebilirsin."
+    : "Telefon değiştirsen ya da uygulamayı silsen de puanlarını kaybetme: profilini bir hesaba bağla. E-posta adresin saklanmaz.";
+  for (const saglayici of ["google", "apple"]) {
+    const satir = $(`hesap-${saglayici}`);
+    const bagli = hesaplar.includes(saglayici);
+    satir.querySelector(".hesap-durumu").hidden = !bagli;
+    satir.querySelector(".hesap-kaldir").hidden = !bagli;
+    const kap = $(`profil-${saglayici}`);
+    kap.hidden = bagli;
+    if (bagli) continue;
+    if (saglayici === "google") googleDugmesi(kap, (jeton) => hesapIleGiris("google", { jeton }, false)).catch(() => {});
+    else appleDugmesi(kap, (bilgi) => hesapIleGiris("apple", bilgi, false));
+  }
 }
 
 // ---------- Ekranlar ----------
@@ -718,11 +732,14 @@ async function basla() {
     if (!confirm(`${durum.rakip.ad} engellensin mi? Bir daha eşleşmeyeceksiniz.`)) return;
     if (gonder({ t: "engelle" })) $("rakip-penceresi").close();
   });
-  $("hesap-kaldir").addEventListener("click", async () => {
-    if (!confirm("Google bağı kaldırılsın mı? Telefonunu değiştirirsen puanlarını geri getiremezsin.")) return;
-    await istek("/giris/kaldir", { ...kimlik, saglayici: "google" }).catch(() => {});
-    await profilYenile();
-  });
+  for (const dugme of document.querySelectorAll(".hesap-kaldir")) {
+    dugme.addEventListener("click", async () => {
+      const saglayici = dugme.dataset.saglayici;
+      if (!confirm(`${SAGLAYICI_ADI[saglayici]} bağı kaldırılsın mı? Başka hesap bağlı değilse telefonunu değiştirince puanlarını geri getiremezsin.`)) return;
+      await istek("/giris/kaldir", { ...kimlik, saglayici }).catch(() => {});
+      await profilYenile();
+    });
+  }
   $("profil-ac").addEventListener("click", () => {
     profilYenile();
     engelleriGoster();
@@ -788,7 +805,8 @@ async function basla() {
     $("ad-girisi").value = oku(KIMLIK_ANAHTARI + ".ad", "") || "";
     if (webGirisVar) {
       $("ad-giris").hidden = false;
-      googleDugmesi($("ad-google"), (jeton) => googleIleGiris(jeton, true)).catch(() => ($("ad-giris").hidden = true));
+      googleDugmesi($("ad-google"), (jeton) => hesapIleGiris("google", { jeton }, true)).catch(() => {});
+      appleDugmesi($("ad-apple"), (bilgi) => hesapIleGiris("apple", bilgi, true));
     }
     return ekranGoster("ad");
   }
