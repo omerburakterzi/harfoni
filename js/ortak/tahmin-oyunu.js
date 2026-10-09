@@ -194,13 +194,9 @@ export function tahminOyunuKur(ayarlar) {
   }
 
   function paylasimMetni() {
-    // Muamma'da karelerin yeri gizli, sadece sayılar paylaşılır.
-    const satirlar = tahminler.map((t, i) => {
-      const renk = satirRenkleri(t, i);
-      if (!sayiIpucu) return renk.map((d) => emoji[d]).join("");
-      const adet = sayiOzeti(renk);
-      return ["dogru", "var", "yok"].map((d) => emoji[d].repeat(adet[d])).join("");
-    });
+    // Paylaşım oyun bitince yapılır; Muamma'da da renkler gerçek yerlerinde
+    // gösterilir (oyun sırasında gizli olan yerler artık sır değil).
+    const satirlar = tahminler.map((t, i) => satirRenkleri(t, i).map((d) => emoji[d]).join(""));
     const skor = kazandi ? tahminler.length : "X";
     const adres = location.origin + location.pathname;
     return `Harfoni ${ad} #${gun} ${skor}/${hak}\n\n${satirlar.join("\n")}\n\n${adres}`;
