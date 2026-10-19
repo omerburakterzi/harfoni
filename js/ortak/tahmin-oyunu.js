@@ -32,6 +32,8 @@ function sayiOzeti(renkler) {
  *   emoji       : paylaşım emojilerini değiştirmek için, ör. { yok: "🟥" }
  *   sayiIpucu   : kareler renklenmez, satırın yanında sadece kaç harfin
  *                 doğru / yanlış yerde / yok olduğu yazar (Muamma)
+ *   bitince     : günlük oyun bitince (ya da bitmiş oyun açılınca) çağrılır:
+ *                 ({ gun, tahminler, kazandi, sure }) — sure saniye, bilinmiyorsa null
  */
 export function tahminOyunuKur(ayarlar) {
   const { oyun, ad, hak, tebrik, sayiIpucu = false } = ayarlar;
@@ -47,6 +49,8 @@ export function tahminOyunuKur(ayarlar) {
   let bitti = false;
   let kazandi = false;
   let kilitli = false;
+  let basladi = null; // günlük oyunda ilk tuşa basılan an
+  let bitisAni = null;
 
   const sayfa = sayfaKur({ oyun, hak, tebrik, yeniOyun: baslat, paylasimMetni });
   const { alistirma, gun } = sayfa;
@@ -132,6 +136,7 @@ export function tahminOyunuKur(ayarlar) {
 
   function tusaBasildi(tus) {
     if (bitti || kilitli) return;
+    if (!basladi && !alistirma) basladi = Date.now();
     if (tus === "gir") return gonder();
     if (tus === "sil") {
       mevcut = mevcut.slice(0, -1);
@@ -180,8 +185,18 @@ export function tahminOyunuKur(ayarlar) {
     } else {
       bildir(buyuk(cevap), 3000);
     }
-    if (!alistirma) sonucKaydet(oyun, hak, gun, kazandi, tahminler.length);
+    if (!alistirma) {
+      sonucKaydet(oyun, hak, gun, kazandi, tahminler.length);
+      bitisAni = Date.now();
+      kaydet();
+      gunlukBitti();
+    }
     sonucuGoster(1700);
+  }
+
+  function gunlukBitti() {
+    const sure = basladi && bitisAni ? Math.round((bitisAni - basladi) / 1000) : null;
+    ayarlar.bitince?.({ gun, tahminler: [...tahminler], kazandi, sure });
   }
 
   function sonucuGoster(gecikme) {
@@ -190,7 +205,7 @@ export function tahminOyunuKur(ayarlar) {
 
   function kaydet() {
     if (alistirma) return;
-    yaz(`${oyun}.gunluk`, { gun, tahminler, bitti, kazandi, notlar });
+    yaz(`${oyun}.gunluk`, { gun, tahminler, bitti, kazandi, notlar, basladi, bitisAni });
   }
 
   function paylasimMetni() {
@@ -226,7 +241,12 @@ export function tahminOyunuKur(ayarlar) {
       bitti = kayit.bitti;
       kazandi = kayit.kazandi;
       notlar = kayit.notlar || {};
-      if (bitti) sonucuGoster(400);
+      basladi = kayit.basladi || null;
+      bitisAni = kayit.bitisAni || null;
+      if (bitti) {
+        sonucuGoster(400);
+        gunlukBitti();
+      }
     }
   }
 

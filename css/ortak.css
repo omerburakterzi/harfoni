@@ -930,3 +930,21 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---- Klasik sıralaması ---- */
+.siralama-ozet { margin-top: 18px; padding: 12px 14px; border-radius: var(--yaricap); background: var(--yumusak); text-align: center; }
+.siralama-ozet p { margin: 0 0 8px; }
+.siralama-ozet .duz-dugme { margin: 0 auto; }
+.kazanilan-puan { color: var(--dogru); font-size: 1.1rem; }
+.siralama-sekmeleri { width: fit-content; margin-bottom: 10px; }
+.siralama-sekmeleri button { padding: 5px 14px; border: 0; border-radius: 999px; background: none; font-size: 0.85rem; font-weight: 600; color: var(--soluk); cursor: pointer; }
+.siralama-sekmeleri button.secili { background: var(--yuzey); color: var(--yazi); box-shadow: 0 1px 3px rgb(0 0 0 / 0.15); }
+.siralama-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.siralama-liste li { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 8px; align-items: center; padding: 7px 10px; border-radius: 8px; }
+.siralama-liste li:nth-child(odd) { background: var(--yumusak); }
+.siralama-liste li.ben { background: var(--dogru); color: #fff; }
+.sira-no { font-weight: 800; color: var(--soluk); }
+.siralama-liste li.ben .sira-no { color: #fff; }
+.sira-ad { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sira-puan { font-weight: 800; font-variant-numeric: tabular-nums; }
+.siralama-ben { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; border: 2px solid var(--dogru); }

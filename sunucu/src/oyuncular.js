@@ -101,6 +101,19 @@ export class Oyuncular extends DurableObject {
       zaman INTEGER NOT NULL,
       PRIMARY KEY (oyuncu, anahtar)
     )`);
+    // Klasik günlük bulmaca sonuçları (sıralama için). gecerli = 0 olan
+    // şüpheli sonuçlar sıralamaya girmez.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gunluk (
+      oyuncu TEXT NOT NULL,
+      gun INTEGER NOT NULL,
+      puan INTEGER NOT NULL,
+      tahmin INTEGER NOT NULL,
+      sure INTEGER NOT NULL,
+      gecerli INTEGER NOT NULL,
+      zaman INTEGER NOT NULL,
+      PRIMARY KEY (oyuncu, gun)
+    )`);
+    this.sql.exec("CREATE INDEX IF NOT EXISTS gunluk_gun ON gunluk (gun)");
     // Kurallara uymayan oyuncu Düello'dan uzaklaştırılabilir.
     const sutunlar = this.sql.exec("PRAGMA table_info(oyuncu)").toArray().map((s) => s.name);
     if (!sutunlar.includes("yasakli")) this.sql.exec("ALTER TABLE oyuncu ADD COLUMN yasakli INTEGER NOT NULL DEFAULT 0");
@@ -204,6 +217,7 @@ export class Oyuncular extends DurableObject {
     this.sql.exec("DELETE FROM esli_mac WHERE a = ? OR b = ?", id, id);
     this.sql.exec("DELETE FROM hesap WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM cihaz WHERE oyuncu = ?", id);
+    this.sql.exec("DELETE FROM gunluk WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM sikayet WHERE sikayetci = ? OR hedef = ?", id, id);
     this.sql.exec("DELETE FROM oyuncu WHERE id = ?", id);
     return jetonlar;
@@ -316,5 +330,43 @@ export class Oyuncular extends DurableObject {
   // Bir kişi hakkındaki tüm açık şikâyetleri kapatır.
   sikayetleriKapat(hedef) {
     this.sql.exec("UPDATE sikayet SET acik = 0 WHERE hedef = ?", hedef);
+  }
+
+  // ---------- Klasik günlük sıralama ----------
+
+  // Her oyuncunun her gün için ilk gönderdiği sonuç geçerlidir.
+  gunlukKaydet(id, anahtar, gun, puan, tahmin, sure, gecerli) {
+    if (!this.dogrula(id, anahtar)) return null;
+    this.sql.exec(
+      "INSERT OR IGNORE INTO gunluk (oyuncu, gun, puan, tahmin, sure, gecerli, zaman) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      id, gun, puan, tahmin, sure, gecerli ? 1 : 0, Date.now()
+    );
+    return this.sql.exec("SELECT puan, gecerli FROM gunluk WHERE oyuncu = ? AND gun = ?", id, gun).one();
+  }
+
+  // ilk..son günleri arasındaki toplam puana göre sıralama. Eşitlikte daha
+  // kısa toplam süre önde. id verilirse o oyuncunun sırası da döner.
+  siralama(ilk, son, id) {
+    const sorgu = `SELECT g.oyuncu, o.ad, SUM(g.puan) AS puan, COUNT(*) AS oyun, SUM(g.sure) AS sure
+      FROM gunluk g JOIN oyuncu o ON o.id = g.oyuncu
+      WHERE g.gun BETWEEN ? AND ? AND g.gecerli = 1 AND o.yasakli = 0
+      GROUP BY g.oyuncu`;
+    const liste = this.sql.exec(`${sorgu} ORDER BY puan DESC, sure ASC LIMIT 50`, ilk, son).toArray();
+    const toplam = this.sql.exec(`SELECT COUNT(*) AS n FROM (${sorgu})`, ilk, son).one().n;
+    let ben = null;
+    if (id) {
+      const benim = this.sql.exec(`SELECT * FROM (${sorgu}) WHERE oyuncu = ?`, ilk, son, id).toArray()[0];
+      if (benim) {
+        const onde = this.sql
+          .exec(`SELECT COUNT(*) AS n FROM (${sorgu}) WHERE puan > ? OR (puan = ? AND sure < ?)`, ilk, son, benim.puan, benim.puan, benim.sure)
+          .one().n;
+        ben = { sira: onde + 1, puan: benim.puan, oyun: benim.oyun };
+      }
+    }
+    return {
+      toplam,
+      liste: liste.map((s, i) => ({ sira: i + 1, ad: s.ad, puan: s.puan, oyun: s.oyun, ben: s.oyuncu === id })),
+      ben,
+    };
   }
 }
