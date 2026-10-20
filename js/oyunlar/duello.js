@@ -10,6 +10,7 @@ import { klavyeKur } from "../ortak/klavye.js";
 import { bildir, pencereAc, pencereleriBagla, paylas } from "../ortak/arayuz.js";
 import { YEREL, WS_SUNUCU, DUELLO_ADRESI, istek } from "../ortak/sunucu.js";
 import { girisSaglayicilari, girisDugmesi } from "../ortak/giris.js";
+import { RUTBELER, rutbe, rutbeYazisi } from "../ortak/rutbe.js";
 
 const UZUNLUK = 5;
 const CEVIRME_ARASI = 280;
@@ -74,6 +75,7 @@ function profiliGoster() {
   for (const mod of Object.keys(MODLAR)) {
     const p = profil.puanlar[mod];
     $(`lobi-puan-${mod}`).textContent = p.puan;
+    $(`lobi-rutbe-${mod}`).textContent = rutbeYazisi(p.puan);
     $(`profil-puan-${mod}`).textContent = p.puan;
     $(`profil-mac-${mod}`).textContent = p.mac;
     $(`profil-galibiyet-${mod}`).textContent = p.galibiyet;
@@ -81,6 +83,7 @@ function profiliGoster() {
   }
   $("profil-ad").value = profil.ad;
   hesapBolumunuGoster();
+  sezonlariGoster();
 }
 
 async function adKaydet(ad) {
@@ -96,6 +99,83 @@ async function profilYenile() {
   } catch {
     // önemli değil; bir sonraki seferde yenilenir
   }
+}
+
+// ---------- Rütbe, sezon ve Düello sıralaması ----------
+
+const AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+const ayAdi = (ay) => `${AYLAR[Number(ay.slice(5, 7)) - 1]} ${ay.slice(0, 4)}`;
+
+function sezonlariGoster() {
+  const sezonlar = profil?.sezonlar || [];
+  $("sezon-bolumu").hidden = !sezonlar.length;
+  $("sezon-listesi").innerHTML = "";
+  for (const s of sezonlar) {
+    const r = rutbe(s.en_yuksek);
+    const el = document.createElement("div");
+    el.className = "sezon-rozeti";
+    el.innerHTML = `<span class="sezon-simge">${r.simge}</span><span><strong>${r.ad}</strong><small>${ayAdi(s.ay)} · ${MODLAR[s.mod].ad} · en yüksek ${s.en_yuksek}</small></span>`;
+    $("sezon-listesi").appendChild(el);
+  }
+}
+
+let dsMod = "hizli";
+let dsTur = "puan";
+
+async function duelloSiralamasiniDoldur() {
+  for (const b of document.querySelectorAll("[data-ds-mod]")) b.classList.toggle("secili", b.dataset.dsMod === dsMod);
+  for (const b of document.querySelectorAll("[data-ds-tur]")) b.classList.toggle("secili", b.dataset.dsTur === dsTur);
+  const liste = $("ds-liste");
+  liste.innerHTML = `<li class="soluk-yazi">Yükleniyor…</li>`;
+  let veri;
+  try {
+    veri = await istek("/duello/siralama", { mod: dsMod, tur: dsTur, ...kimlik });
+  } catch (hata) {
+    liste.innerHTML = `<li class="soluk-yazi">${hata.message}</li>`;
+    return;
+  }
+  if (veri.mod !== dsMod || veri.tur !== dsTur) return;
+  $("ds-bilgi").textContent = veri.toplam
+    ? dsTur === "ay" ? `Bu ay ${veri.toplam} kişi ${MODLAR[dsMod].ad} modda oynadı.` : `${veri.toplam} kişi en az 5 maç yaptı.`
+    : "Henüz kimse yok. İlk sen ol!";
+  liste.innerHTML = "";
+  for (const s of veri.liste) {
+    const li = document.createElement("li");
+    if (s.ben) li.className = "ben";
+    const deger = dsTur === "ay" ? `${s.deger} galibiyet` : s.deger;
+    li.innerHTML = `<span class="sira-no">${s.sira}</span><span class="sira-ad"><span></span> <small class="rutbe-rozeti">${rutbeYazisi(s.puan ?? 1000)}</small></span><span class="sira-puan">${deger}</span>`;
+    li.querySelector(".sira-ad span").textContent = s.ad;
+    liste.appendChild(li);
+  }
+  const listedeyim = veri.liste.some((s) => s.ben);
+  $("ds-ben").hidden = !veri.ben || listedeyim;
+  if (veri.ben && !listedeyim) $("ds-ben").innerHTML = `Sen: <strong>${veri.ben.sira}.</strong> sıra · ${dsTur === "ay" ? `${veri.ben.deger} galibiyet` : `${veri.ben.deger} puan`}`;
+}
+
+function duelloSiralamasiniAc() {
+  $("rutbe-listesi").innerHTML = RUTBELER.map((r, i) => {
+    const ust = RUTBELER[i + 1];
+    const aralik = !Number.isFinite(r.alt) ? `${ust.alt} altı` : ust ? `${r.alt}–${ust.alt - 1}` : `${r.alt} ve üstü`;
+    return `<li>${r.simge} <strong>${r.ad}</strong>: ${aralik}</li>`;
+  }).join("");
+  pencereAc("duello-siralama-penceresi");
+  duelloSiralamasiniDoldur();
+}
+
+// Maç sonunda: rütbe atladıysa kutla, değilse sonraki rütbeye ne kaldığını göster.
+function rutbeDurumunuGoster(puan) {
+  const kutu = $("rutbe-durumu");
+  kutu.hidden = !puan;
+  if (!puan) return;
+  const once = rutbe(puan.eski);
+  const simdi = rutbe(puan.yeni);
+  let yazi;
+  if (simdi.sira > once.sira) yazi = `🎉 <strong>${simdi.simge} ${simdi.ad}</strong> oldun!`;
+  else if (simdi.sira < once.sira) yazi = `${simdi.simge} ${simdi.ad} rütbesine düştün. Bir sonraki maçta geri al!`;
+  else if (simdi.sonraki) yazi = `${simdi.simge} ${simdi.ad} · ${simdi.sonraki.simge} ${simdi.sonraki.ad} için <strong>${simdi.kalan}</strong> puan kaldı`;
+  else yazi = `${simdi.simge} ${simdi.ad} · zirvedesin!`;
+  $("rutbe-yazisi").innerHTML = yazi;
+  $("rutbe-ilerleme").style.width = `${Math.round(simdi.ilerleme * 100)}%`;
 }
 
 // ---------- Google ile giriş ----------
@@ -409,7 +489,7 @@ function ciz(d) {
 
   // Rakip
   $("rakip-ad").textContent = d.rakip.ad;
-  $("rakip-puan").textContent = d.rakip.bot ? "puana sayılmaz" : `${d.rakip.puan} puan`;
+  $("rakip-puan").textContent = d.rakip.bot ? "puana sayılmaz" : `${rutbeYazisi(d.rakip.puan)} · ${d.rakip.puan}`;
   $("rakip-menu").hidden = d.rakip.bot;
   $("rakip-bagli").classList.toggle("bagli", d.rakip.bagli);
   $("rakip-bagli").title = d.rakip.bagli ? "Bağlı" : "Bağlantısı koptu";
@@ -604,6 +684,7 @@ function sonucuDoldur(d) {
       }[d.sonuc.puansizSebep] || "";
   }
   $("sonuc-rakip-menu").hidden = d.rakip.bot;
+  rutbeDurumunuGoster(puan);
 
   const kap = $("rakip-sonuc");
   kap.innerHTML = "";
@@ -730,6 +811,9 @@ async function basla() {
     }
   });
   $("rakip-menu").addEventListener("click", rakipMenusunuAc);
+  $("duello-siralama-ac").addEventListener("click", duelloSiralamasiniAc);
+  for (const b of document.querySelectorAll("[data-ds-mod]")) b.addEventListener("click", () => ((dsMod = b.dataset.dsMod), duelloSiralamasiniDoldur()));
+  for (const b of document.querySelectorAll("[data-ds-tur]")) b.addEventListener("click", () => ((dsTur = b.dataset.dsTur), duelloSiralamasiniDoldur()));
   $("sonuc-rakip-menu").addEventListener("click", rakipMenusunuAc);
   for (const dugme of document.querySelectorAll("[data-sebep]")) {
     dugme.addEventListener("click", () => {

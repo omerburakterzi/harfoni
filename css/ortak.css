@@ -997,3 +997,18 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
 .grup-araclari { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
 .grup-araclari .soluk-yazi { margin-right: auto; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em; }
 .siralama-liste li.oynamadi { opacity: 0.5; }
+
+/* ---- Düello rütbeleri ---- */
+.rutbe-rozeti { font-size: 0.78rem; font-weight: 600; color: var(--soluk); white-space: nowrap; }
+.profil-karti .lobi-puanlar { flex-wrap: wrap; justify-content: center; }
+#duello-siralama-ac { margin: 8px auto 0; }
+.rutbe-durumu { margin-top: 10px; padding: 10px 12px; border-radius: var(--yaricap); background: var(--yumusak); }
+.rutbe-durumu p { margin: 0 0 6px; }
+.ilerleme { height: 8px; border-radius: 999px; background: var(--cizgi); overflow: hidden; }
+.ilerleme i { display: block; height: 100%; border-radius: 999px; background: var(--dogru); transition: width 0.8s ease; }
+.sezon-listesi { display: grid; gap: 6px; }
+.sezon-rozeti { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--yumusak); }
+.sezon-simge { font-size: 1.4rem; }
+.sezon-rozeti small { display: block; color: var(--soluk); font-size: 0.78rem; }
+.siralama-liste .sira-ad small { margin-left: 4px; }
+.siralama-liste li.ben .rutbe-rozeti { color: #fff; }

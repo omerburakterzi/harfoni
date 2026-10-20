@@ -13,6 +13,7 @@
 //   POST /gunluk/sonuc    { id, anahtar, oyun, gun, tahminler, sure }  günlük oyun sonucunu gönder
 //   POST /siralama        { donem, oyun?, id?, anahtar? }     gun | hafta | ay sıralaması
 //   POST /ozet            { id, anahtar }                     seri ve bu haftaki sıra
+//   POST /duello/siralama { mod, tur, id?, anahtar? }         Düello: puan ya da bu ayın galibiyetleri
 //   POST /grup/kur        { id, anahtar, ad }                 arkadaş grubu kur
 //   POST /grup/bilgi      { kod, id?, anahtar? }              davet linkindeki grubun adı
 //   POST /grup/katil      { id, anahtar, kod }  /grup/ayril   gruba katıl / gruptan ayrıl
@@ -162,6 +163,15 @@ export default {
         return cevap({ donem, oyun, ilk, son, ...sonuc }, kaynak);
       }
       return cevap({ donem, oyun, ilk, son, ...(await oyuncular.siralama(ilk, son, benimId, oyun)) }, kaynak);
+    }
+    if (url.pathname === "/duello/siralama") {
+      const mod = ["hizli", "uzun"].includes(govde.mod) ? govde.mod : "hizli";
+      const tur = govde.tur === "ay" ? "ay" : "puan";
+      let benimId = null;
+      if (KIMLIK.test(govde.id) && KIMLIK.test(govde.anahtar)) {
+        if (await oyuncular.dogrula(govde.id, await anahtarOzeti(govde.anahtar))) benimId = govde.id;
+      }
+      return cevap({ mod, tur, ...(await oyuncular.duelloSiralamasi(mod, tur, benimId)) }, kaynak);
     }
     if (url.pathname === "/grup/bilgi") {
       let benimId = null;

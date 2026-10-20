@@ -70,9 +70,10 @@
       <div class="profil-karti">
         <strong id="lobi-ad"></strong>
         <div class="lobi-puanlar">
-          <span>Hızlı <b id="lobi-puan-hizli">1000</b></span>
-          <span>Uzun <b id="lobi-puan-uzun">1000</b></span>
+          <span>Hızlı <b id="lobi-puan-hizli">1000</b> <small id="lobi-rutbe-hizli" class="rutbe-rozeti"></small></span>
+          <span>Uzun <b id="lobi-puan-uzun">1000</b> <small id="lobi-rutbe-uzun" class="rutbe-rozeti"></small></span>
         </div>
+        <button id="duello-siralama-ac" class="duz-dugme kucuk" type="button">🏆 Düello sıralaması</button>
       </div>
       <p id="yasak-uyarisi" class="yasak-uyarisi" hidden>Kurallara uymadığın için Düello'dan uzaklaştırıldın. Bir hata olduğunu düşünüyorsan <a href="mailto:iletisim@harfoni.com">iletisim@harfoni.com</a> adresine yaz.</p>
       <p>Aynı gizli kelimeyi rakibinle aynı anda ara: <strong>daha az tahminde bulan kazanır!</strong></p>
@@ -189,6 +190,10 @@
     <p class="sonuc-kelime-satiri">Kelime: <a id="sonuc-kelime" target="_blank" rel="noopener" title="Anlamına bak"></a></p>
     <p id="sonuc-aciklama" class="sonuc-aciklama"></p>
     <p id="puan-degisimi" class="puan-degisimi"></p>
+    <div id="rutbe-durumu" class="rutbe-durumu" hidden>
+      <p id="rutbe-yazisi"></p>
+      <div class="ilerleme"><i id="rutbe-ilerleme"></i></div>
+    </div>
     <h3>Rakibinin tahminleri</h3>
     <div id="rakip-sonuc" class="rakip-sonuc"></div>
     <p id="rovans-durumu" class="rovans-durumu" hidden></p>
@@ -198,6 +203,27 @@
     </div>
     <button id="yeni-mac" class="duz-dugme tam" type="button">Başka biriyle oyna</button>
     <button id="sonuc-rakip-menu" class="duz-dugme tam soluk-dugme" type="button">Şikâyet et ya da engelle</button>
+  </dialog>
+
+  <dialog id="duello-siralama-penceresi" class="pencere">
+    <button class="kapat" type="button" data-kapat aria-label="Kapat">×</button>
+    <h2>Düello sıralaması</h2>
+    <div class="sekmeler">
+      <button type="button" data-ds-mod="hizli" class="secili">Hızlı</button>
+      <button type="button" data-ds-mod="uzun">Uzun</button>
+    </div>
+    <div class="sekmeler kucuk-sekmeler">
+      <button type="button" data-ds-tur="puan" class="secili">En yüksek puan</button>
+      <button type="button" data-ds-tur="ay">Bu ay en çok galibiyet</button>
+    </div>
+    <p id="ds-bilgi" class="aciklama"></p>
+    <ol id="ds-liste" class="siralama-liste"></ol>
+    <p id="ds-ben" class="siralama-ben" hidden></p>
+    <details class="puan-aciklamasi">
+      <summary>Rütbeler</summary>
+      <ul id="rutbe-listesi"></ul>
+      <p>Puan sıralamasına girmek için o modda en az 5 maç gerekir. Bot ve puansız maçlar sayılmaz.</p>
+    </details>
   </dialog>
 
   <dialog id="rakip-penceresi" class="pencere">
@@ -250,6 +276,11 @@
         <button class="duz-dugme hesap-kaldir" type="button" data-saglayici="apple" hidden>Bağı kaldır</button>
         <div id="profil-apple" class="google-kap"></div>
       </div>
+    </div>
+    <div id="sezon-bolumu" hidden>
+      <h3>Sezon rozetlerin</h3>
+      <p class="aciklama">Her ay bir sezon. Ayın sonunda o ay ulaştığın en yüksek rütbe burada kalır.</p>
+      <div id="sezon-listesi" class="sezon-listesi"></div>
     </div>
     <h3>Engellediklerin</h3>
     <div id="engel-listesi" class="engel-listesi"><p class="soluk-yazi">Kimseyi engellemedin.</p></div>

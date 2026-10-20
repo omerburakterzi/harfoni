@@ -26,8 +26,9 @@ export function yeniPuan(puan, rakipPuani, sonuc, k) {
   return Math.round(puan + k * (sonuc - beklenen));
 }
 
-// Türkiye saatine göre bugünün tarihi (ör. "2026-10-09")
+// Türkiye saatine göre bugünün tarihi (ör. "2026-10-09") ve ayı (sezon, ör. "2026-10")
 const bugun = () => new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const buAy = () => bugun().slice(0, 7);
 
 export class Oyuncular extends DurableObject {
   constructor(ctx, env) {
@@ -162,6 +163,23 @@ export class Oyuncular extends DurableObject {
       PRIMARY KEY (grup, oyuncu)
     )`);
     this.sql.exec("CREATE INDEX IF NOT EXISTS grup_uye_oyuncu ON grup_uye (oyuncu)");
+    // Düello maç kayıtları (aylık sıralama için) ve her ayın (sezonun) en
+    // yüksek puanı (sezon rozeti için)
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS mac_kaydi (
+      oyuncu TEXT NOT NULL,
+      mod TEXT NOT NULL,
+      ay TEXT NOT NULL,
+      sonuc REAL NOT NULL,
+      zaman INTEGER NOT NULL
+    )`);
+    this.sql.exec("CREATE INDEX IF NOT EXISTS mac_kaydi_ay ON mac_kaydi (mod, ay)");
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS sezon (
+      oyuncu TEXT NOT NULL,
+      mod TEXT NOT NULL,
+      ay TEXT NOT NULL,
+      en_yuksek INTEGER NOT NULL,
+      PRIMARY KEY (oyuncu, mod, ay)
+    )`);
     // Kurallara uymayan oyuncu Düello'dan uzaklaştırılabilir.
     const sutunlar = this.sql.exec("PRAGMA table_info(oyuncu)").toArray().map((s) => s.name);
     if (!sutunlar.includes("yasakli")) this.sql.exec("ALTER TABLE oyuncu ADD COLUMN yasakli INTEGER NOT NULL DEFAULT 0");
@@ -200,7 +218,8 @@ export class Oyuncular extends DurableObject {
     const puanlar = {};
     for (const mod of MOD_ADLARI) puanlar[mod] = this.#derece(id, mod);
     const hesaplar = this.sql.exec("SELECT saglayici FROM hesap WHERE oyuncu = ?", id).toArray().map((h) => h.saglayici);
-    return { id, ad: oyuncu.ad, puanlar, hesaplar, yasakli: Boolean(oyuncu.yasakli) };
+    const sezonlar = this.sql.exec("SELECT mod, ay, en_yuksek FROM sezon WHERE oyuncu = ? ORDER BY ay DESC LIMIT 24", id).toArray();
+    return { id, ad: oyuncu.ad, puanlar, hesaplar, sezonlar, yasakli: Boolean(oyuncu.yasakli) };
   }
 
   // Google/Apple ile giriş. Hesap bir profile bağlıysa o profil için bu
@@ -268,6 +287,8 @@ export class Oyuncular extends DurableObject {
     this.sql.exec("DELETE FROM gunluk WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM sonuc WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM grup_uye WHERE oyuncu = ?", id);
+    this.sql.exec("DELETE FROM mac_kaydi WHERE oyuncu = ?", id);
+    this.sql.exec("DELETE FROM sezon WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM gun_ozet WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM sikayet WHERE sikayetci = ? OR hedef = ?", id, id);
     this.sql.exec("DELETE FROM oyuncu WHERE id = ?", id);
@@ -303,6 +324,15 @@ export class Oyuncular extends DurableObject {
       );
     guncelle(aId, yeniA, sonucA);
     guncelle(bId, yeniB, 1 - sonucA);
+    const ay = buAy();
+    for (const [id, yeni, sonuc] of [[aId, yeniA, sonucA], [bId, yeniB, 1 - sonucA]]) {
+      this.sql.exec("INSERT INTO mac_kaydi (oyuncu, mod, ay, sonuc, zaman) VALUES (?, ?, ?, ?, ?)", id, mod, ay, sonuc, Date.now());
+      this.sql.exec(
+        `INSERT INTO sezon (oyuncu, mod, ay, en_yuksek) VALUES (?, ?, ?, ?)
+         ON CONFLICT (oyuncu, mod, ay) DO UPDATE SET en_yuksek = MAX(en_yuksek, excluded.en_yuksek)`,
+        id, mod, ay, yeni
+      );
+    }
     return {
       [aId]: { eski: a.puan, yeni: yeniA },
       [bId]: { eski: b.puan, yeni: yeniB },
@@ -554,5 +584,36 @@ export class Oyuncular extends DurableObject {
       const ben = s.liste.find((x) => x.ben);
       return { kod: g.kod, ad: g.ad, sira: ben?.sira, toplam: s.toplam };
     });
+  }
+
+  // ---------- Düello sıralaması ----------
+
+  // tur "puan": en yüksek puanlılar (en az 5 maç). tur "ay": bu ay en çok kazananlar.
+  duelloSiralamasi(mod, tur, id) {
+    const sorgu =
+      tur === "ay"
+        ? `SELECT k.oyuncu, o.ad, SUM(k.sonuc = 1) AS deger, COUNT(*) AS mac, d.puan AS puan
+           FROM mac_kaydi k JOIN oyuncu o ON o.id = k.oyuncu
+           LEFT JOIN derece d ON d.oyuncu = k.oyuncu AND d.mod = k.mod
+           WHERE k.mod = ?1 AND k.ay = ?2 AND o.yasakli = 0 GROUP BY k.oyuncu`
+        : `SELECT d.oyuncu, o.ad, d.puan AS deger, d.mac AS mac, d.puan AS puan
+           FROM derece d JOIN oyuncu o ON o.id = d.oyuncu
+           WHERE d.mod = ?1 AND d.mac >= 5 AND o.yasakli = 0 AND ?2 = ?2`;
+    const ek = [mod, buAy()];
+    const liste = this.sql.exec(`SELECT * FROM (${sorgu}) ORDER BY deger DESC, mac ASC LIMIT 50`, ...ek).toArray();
+    const toplam = this.sql.exec(`SELECT COUNT(*) AS n FROM (${sorgu})`, ...ek).one().n;
+    let ben = null;
+    if (id) {
+      const benim = this.sql.exec(`SELECT * FROM (${sorgu}) WHERE oyuncu = ?3`, ...ek, id).toArray()[0];
+      if (benim) {
+        const onde = this.sql.exec(`SELECT COUNT(*) AS n FROM (${sorgu}) WHERE deger > ?3 OR (deger = ?3 AND mac < ?4)`, ...ek, benim.deger, benim.mac).one().n;
+        ben = { sira: onde + 1, deger: benim.deger, mac: benim.mac };
+      }
+    }
+    return {
+      toplam,
+      liste: liste.map((s, i) => ({ sira: i + 1, ad: s.ad, deger: s.deger, mac: s.mac, puan: s.puan, ben: s.oyuncu === id })),
+      ben,
+    };
   }
 }
