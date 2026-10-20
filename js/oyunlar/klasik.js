@@ -10,5 +10,5 @@ tahminOyunuKur({
   hak: 6,
   tebrik: ["Dâhiyane!", "Muhteşem!", "Harika!", "Çok iyi!", "Güzel!", "Kıl payı!"],
   renkler: (tahmin, cevap) => degerlendir(tahmin, cevap),
-  bitince: gunlukSonucuGonder,
+  bitince: gunlukSonucuGonder("klasik"),
 });

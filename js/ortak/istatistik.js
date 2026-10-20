@@ -3,7 +3,7 @@ import { oku, yaz } from "./depo.js";
 // Her oyunun kendi istatistiği olur: oynanan, kazanılan, seri ve
 // kaçıncı tahminde bulunduğunun dağılımı.
 export function istatistikOku(oyun, hakSayisi) {
-  return oku(`${oyun}.istatistik`, {
+  const ist = oku(`${oyun}.istatistik`, {
     oynanan: 0,
     kazanilan: 0,
     seri: 0,
@@ -11,6 +11,13 @@ export function istatistikOku(oyun, hakSayisi) {
     dagilim: Array(hakSayisi).fill(0),
     sonGun: null,
   });
+  // Hak sayısı azaldıysa (Arada 18 → 15) fazla satırlar son satıra eklenir.
+  if (ist.dagilim.length > hakSayisi) {
+    const fazla = ist.dagilim.splice(hakSayisi).reduce((a, b) => a + b, 0);
+    ist.dagilim[hakSayisi - 1] += fazla;
+  }
+  while (ist.dagilim.length < hakSayisi) ist.dagilim.push(0);
+  return ist;
 }
 
 export function sonucKaydet(oyun, hakSayisi, gun, kazandi, tahminSayisi) {

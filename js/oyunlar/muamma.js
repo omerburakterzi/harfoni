@@ -1,11 +1,15 @@
 import { tahminOyunuKur } from "../ortak/tahmin-oyunu.js";
+import { siralamaKur, gunlukSonucuGonder } from "../ortak/siralama.js";
 import { kucuk } from "../ortak/turkce.js";
 import { isaretTemizleyiciKur } from "../ortak/isaretler.js";
 
 // Muamma: hangi harflerin doğru olduğu söylenmez, sadece kaç tanesinin
 // doğru yerde, yanlış yerde ya da kelimede yok olduğu söylenir.
+siralamaKur();
+
 const oyun = tahminOyunuKur({
   oyun: "muamma",
+  bitince: gunlukSonucuGonder("muamma"),
   ad: "Muamma",
   hak: 8,
   tebrik: [

@@ -1,4 +1,5 @@
 import { tahminOyunuKur } from "../ortak/tahmin-oyunu.js";
+import { siralamaKur, gunlukSonucuGonder } from "../ortak/siralama.js";
 import { degerlendir } from "../ortak/degerlendir.js";
 import { rastgeleUretec } from "../ortak/rastgele.js";
 import { kucuk } from "../ortak/turkce.js";
@@ -22,8 +23,11 @@ function palavraRenkleri(tahmin, cevap, satirNo, tohum) {
   return sonuc;
 }
 
+siralamaKur();
+
 const oyun = tahminOyunuKur({
   oyun: "palavra",
+  bitince: gunlukSonucuGonder("palavra"),
   ad: "Palavra",
   hak: 8,
   tebrik: [

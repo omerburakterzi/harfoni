@@ -936,9 +936,15 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
 .siralama-ozet p { margin: 0 0 8px; }
 .siralama-ozet .duz-dugme { margin: 0 auto; }
 .kazanilan-puan { color: var(--dogru); font-size: 1.1rem; }
-.siralama-sekmeleri { width: fit-content; margin-bottom: 10px; }
-.siralama-sekmeleri button { padding: 5px 14px; border: 0; border-radius: 999px; background: none; font-size: 0.85rem; font-weight: 600; color: var(--soluk); cursor: pointer; }
-.siralama-sekmeleri button.secili { background: var(--yuzey); color: var(--yazi); box-shadow: 0 1px 3px rgb(0 0 0 / 0.15); }
+.sekmeler { display: flex; gap: 4px; width: fit-content; max-width: 100%; margin-bottom: 8px; padding: 3px; border-radius: 999px; background: var(--yumusak); overflow-x: auto; }
+.sekmeler button { flex: none; padding: 5px 14px; border: 0; border-radius: 999px; background: none; font-size: 0.85rem; font-weight: 600; color: var(--soluk); cursor: pointer; }
+.sekmeler button.secili { background: var(--yuzey); color: var(--yazi); box-shadow: 0 1px 3px rgb(0 0 0 / 0.15); }
+.kucuk-sekmeler { flex-wrap: wrap; border-radius: 14px; }
+.kucuk-sekmeler button { padding: 4px 10px; font-size: 0.78rem; }
+.puan-aciklamasi { margin-top: 16px; font-size: 0.85rem; color: var(--soluk); }
+.puan-aciklamasi summary { cursor: pointer; font-weight: 600; }
+.puan-aciklamasi ul { padding-left: 18px; margin: 8px 0; }
+.puan-aciklamasi p { margin: 0; }
 .siralama-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .siralama-liste li { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 8px; align-items: center; padding: 7px 10px; border-radius: 8px; }
 .siralama-liste li:nth-child(odd) { background: var(--yumusak); }
@@ -948,3 +954,24 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
 .sira-ad { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sira-puan { font-weight: 800; font-variant-numeric: tabular-nums; }
 .siralama-ben { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; border: 2px solid var(--dogru); }
+
+/* ---- Ana sayfa: Harfoni Puanı kutusu ---- */
+.puan-kutusu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--yaricap);
+  background: var(--dogru);
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.puan-kutusu[hidden] { display: none; }
+.pk-metin strong { display: block; font-size: 1.05rem; }
+.pk-metin small { display: block; margin-top: 2px; font-size: 0.82rem; opacity: 0.9; }
+.pk-seri { flex: none; font-size: 1.3rem; font-weight: 800; }

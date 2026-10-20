@@ -33,6 +33,11 @@
     <h1 class="marka">Harf<span>oni</span></h1>
     <p class="slogan">Her gün yeni kelimeler, Türkçe bulmacalar.</p>
 
+    <button id="puan-kutusu" class="puan-kutusu" type="button" hidden>
+      <span class="pk-metin"><strong id="pk-baslik"></strong><small id="pk-alt"></small></span>
+      <span id="pk-seri" class="pk-seri"></span>
+    </button>
+
     <div class="oyun-listesi">
       <a class="oyun-karti duello-karti" href="duello.html">
         <div class="oyun-ikonu" aria-hidden="true">
@@ -111,6 +116,7 @@
     <p class="alt-bilgi"><a href="hakkinda.html">Hakkında</a> · <a href="gizlilik.html">Gizlilik</a></p>
     <p class="alt-bilgi">Kelime listeleri <a href="https://github.com/ahmetaa/zemberek-nlp">Zemberek-NLP</a> sözlüğünden (Apache 2.0) ve <a href="https://github.com/hermitdave/FrequencyWords">FrequencyWords</a> sıklık listesinden (<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.tr">CC BY-SA 4.0</a>) hazırlanmıştır.</p>
   </main>
+  <script type="module" src="js/ana-sayfa.js"></script>
   <script>
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 

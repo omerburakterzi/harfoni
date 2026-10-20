@@ -4,6 +4,7 @@
 // anahtar tanır.
 
 import { DurableObject } from "cloudflare:workers";
+import { DORDU_BONUSU, seriBonusu } from "./siralama.js";
 
 export const BASLANGIC_PUANI = 1000;
 export const MOD_ADLARI = ["hizli", "uzun"];
@@ -114,6 +115,39 @@ export class Oyuncular extends DurableObject {
       PRIMARY KEY (oyuncu, gun)
     )`);
     this.sql.exec("CREATE INDEX IF NOT EXISTS gunluk_gun ON gunluk (gun)");
+    // Dört günlük oyunun sonuçları (Harfoni Puanı). gunluk tablosu ilk
+    // sürümden kalma (sadece Klasik), içindekiler buraya taşınır.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS sonuc (
+      oyuncu TEXT NOT NULL,
+      gun INTEGER NOT NULL,
+      oyun TEXT NOT NULL,
+      puan INTEGER NOT NULL,
+      tahmin INTEGER NOT NULL,
+      sure INTEGER NOT NULL,
+      gecerli INTEGER NOT NULL,
+      zaman INTEGER NOT NULL,
+      PRIMARY KEY (oyuncu, gun, oyun)
+    )`);
+    this.sql.exec("CREATE INDEX IF NOT EXISTS sonuc_gun ON sonuc (gun)");
+    // Oyuncunun her günü: kaç oyun bitirdi, serisi kaç gün, bonusu ne.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS gun_ozet (
+      oyuncu TEXT NOT NULL,
+      gun INTEGER NOT NULL,
+      oyun_sayisi INTEGER NOT NULL,
+      seri INTEGER NOT NULL,
+      bonus INTEGER NOT NULL,
+      PRIMARY KEY (oyuncu, gun)
+    )`);
+    if (!this.sql.exec("SELECT 1 FROM sonuc LIMIT 1").toArray().length) {
+      const eskiler = this.sql.exec("SELECT * FROM gunluk ORDER BY gun").toArray();
+      for (const e of eskiler) {
+        this.sql.exec(
+          "INSERT OR IGNORE INTO sonuc (oyuncu, gun, oyun, puan, tahmin, sure, gecerli, zaman) VALUES (?, ?, 'klasik', ?, ?, ?, ?, ?)",
+          e.oyuncu, e.gun, e.puan, e.tahmin, e.sure, e.gecerli, e.zaman
+        );
+        if (e.gecerli) this.#gunuGuncelle(e.oyuncu, e.gun);
+      }
+    }
     // Kurallara uymayan oyuncu Düello'dan uzaklaştırılabilir.
     const sutunlar = this.sql.exec("PRAGMA table_info(oyuncu)").toArray().map((s) => s.name);
     if (!sutunlar.includes("yasakli")) this.sql.exec("ALTER TABLE oyuncu ADD COLUMN yasakli INTEGER NOT NULL DEFAULT 0");
@@ -218,6 +252,8 @@ export class Oyuncular extends DurableObject {
     this.sql.exec("DELETE FROM hesap WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM cihaz WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM gunluk WHERE oyuncu = ?", id);
+    this.sql.exec("DELETE FROM sonuc WHERE oyuncu = ?", id);
+    this.sql.exec("DELETE FROM gun_ozet WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM sikayet WHERE sikayetci = ? OR hedef = ?", id, id);
     this.sql.exec("DELETE FROM oyuncu WHERE id = ?", id);
     return jetonlar;
@@ -332,41 +368,74 @@ export class Oyuncular extends DurableObject {
     this.sql.exec("UPDATE sikayet SET acik = 0 WHERE hedef = ?", hedef);
   }
 
-  // ---------- Klasik günlük sıralama ----------
+  // ---------- Günlük oyun sıralaması (Harfoni Puanı) ----------
 
-  // Her oyuncunun her gün için ilk gönderdiği sonuç geçerlidir.
-  gunlukKaydet(id, anahtar, gun, puan, tahmin, sure, gecerli) {
-    if (!this.dogrula(id, anahtar)) return null;
+  // O günün oyun sayısını, serisini ve bonusunu yeniden hesaplar.
+  #gunuGuncelle(id, gun) {
+    const oyunSayisi = this.sql.exec("SELECT COUNT(*) AS n FROM sonuc WHERE oyuncu = ? AND gun = ? AND gecerli = 1", id, gun).one().n;
+    if (!oyunSayisi) return;
+    const dun = this.sql.exec("SELECT seri FROM gun_ozet WHERE oyuncu = ? AND gun = ?", id, gun - 1).toArray()[0];
+    const seri = dun ? dun.seri + 1 : 1;
+    const bonus = (oyunSayisi >= 4 ? DORDU_BONUSU : 0) + seriBonusu(seri);
     this.sql.exec(
-      "INSERT OR IGNORE INTO gunluk (oyuncu, gun, puan, tahmin, sure, gecerli, zaman) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      id, gun, puan, tahmin, sure, gecerli ? 1 : 0, Date.now()
+      `INSERT INTO gun_ozet (oyuncu, gun, oyun_sayisi, seri, bonus) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (oyuncu, gun) DO UPDATE SET oyun_sayisi = excluded.oyun_sayisi, seri = excluded.seri, bonus = excluded.bonus`,
+      id, gun, oyunSayisi, seri, bonus
     );
-    return this.sql.exec("SELECT puan, gecerli FROM gunluk WHERE oyuncu = ? AND gun = ?", id, gun).one();
   }
 
-  // ilk..son günleri arasındaki toplam puana göre sıralama. Eşitlikte daha
+  // Her oyuncunun her gün her oyun için ilk gönderdiği sonuç geçerlidir.
+  sonucKaydet(id, anahtar, oyun, gun, puan, tahmin, sure, gecerli) {
+    if (!this.dogrula(id, anahtar)) return null;
+    this.sql.exec(
+      "INSERT OR IGNORE INTO sonuc (oyuncu, gun, oyun, puan, tahmin, sure, gecerli, zaman) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      id, gun, oyun, puan, tahmin, sure, gecerli ? 1 : 0, Date.now()
+    );
+    this.#gunuGuncelle(id, gun);
+    // Dünkü sonuç bugünden sonra geldiyse bugünün serisi de değişir.
+    if (this.sql.exec("SELECT 1 FROM gun_ozet WHERE oyuncu = ? AND gun = ?", id, gun + 1).toArray().length) this.#gunuGuncelle(id, gun + 1);
+    const kayit = this.sql.exec("SELECT puan, gecerli FROM sonuc WHERE oyuncu = ? AND gun = ? AND oyun = ?", id, gun, oyun).one();
+    const ozet = this.sql.exec("SELECT oyun_sayisi, seri, bonus FROM gun_ozet WHERE oyuncu = ? AND gun = ?", id, gun).toArray()[0];
+    return { puan: kayit.puan, gecerli: Boolean(kayit.gecerli), seri: ozet?.seri || 0, bonus: ozet?.bonus || 0, oyunSayisi: ozet?.oyun_sayisi || 0 };
+  }
+
+  // ilk..son günleri arasındaki puana göre sıralama. oyun verilirse sadece o
+  // oyunun puanı, verilmezse dört oyunun toplamı + bonuslar. Eşitlikte daha
   // kısa toplam süre önde. id verilirse o oyuncunun sırası da döner.
-  siralama(ilk, son, id) {
-    const sorgu = `SELECT g.oyuncu, o.ad, SUM(g.puan) AS puan, COUNT(*) AS oyun, SUM(g.sure) AS sure
-      FROM gunluk g JOIN oyuncu o ON o.id = g.oyuncu
-      WHERE g.gun BETWEEN ? AND ? AND g.gecerli = 1 AND o.yasakli = 0
-      GROUP BY g.oyuncu`;
-    const liste = this.sql.exec(`${sorgu} ORDER BY puan DESC, sure ASC LIMIT 50`, ilk, son).toArray();
-    const toplam = this.sql.exec(`SELECT COUNT(*) AS n FROM (${sorgu})`, ilk, son).one().n;
+  siralama(ilk, son, id, oyun = null) {
+    const puanlar = oyun
+      ? "SELECT oyuncu, puan, sure FROM sonuc WHERE gun BETWEEN ?1 AND ?2 AND gecerli = 1 AND oyun = ?3"
+      : `SELECT oyuncu, puan, sure FROM sonuc WHERE gun BETWEEN ?1 AND ?2 AND gecerli = 1
+         UNION ALL SELECT oyuncu, bonus, 0 FROM gun_ozet WHERE gun BETWEEN ?1 AND ?2`;
+    const sorgu = `SELECT p.oyuncu, o.ad, SUM(p.puan) AS puan, SUM(p.sure) AS sure
+      FROM (${puanlar}) p JOIN oyuncu o ON o.id = p.oyuncu
+      WHERE o.yasakli = 0 GROUP BY p.oyuncu`;
+    const ek = oyun ? [ilk, son, oyun] : [ilk, son];
+    const liste = this.sql.exec(`${sorgu} ORDER BY puan DESC, sure ASC LIMIT 50`, ...ek).toArray();
+    const toplam = this.sql.exec(`SELECT COUNT(*) AS n FROM (${sorgu})`, ...ek).one().n;
     let ben = null;
     if (id) {
-      const benim = this.sql.exec(`SELECT * FROM (${sorgu}) WHERE oyuncu = ?`, ilk, son, id).toArray()[0];
+      const benim = this.sql.exec(`SELECT * FROM (${sorgu}) WHERE oyuncu = ?${ek.length + 1}`, ...ek, id).toArray()[0];
       if (benim) {
         const onde = this.sql
-          .exec(`SELECT COUNT(*) AS n FROM (${sorgu}) WHERE puan > ? OR (puan = ? AND sure < ?)`, ilk, son, benim.puan, benim.puan, benim.sure)
+          .exec(
+            `SELECT COUNT(*) AS n FROM (${sorgu}) WHERE puan > ?${ek.length + 1} OR (puan = ?${ek.length + 1} AND sure < ?${ek.length + 2})`,
+            ...ek, benim.puan, benim.sure
+          )
           .one().n;
-        ben = { sira: onde + 1, puan: benim.puan, oyun: benim.oyun };
+        ben = { sira: onde + 1, puan: benim.puan, yuzde: Math.max(1, Math.ceil(((onde + 1) / toplam) * 100)) };
       }
     }
     return {
       toplam,
-      liste: liste.map((s, i) => ({ sira: i + 1, ad: s.ad, puan: s.puan, oyun: s.oyun, ben: s.oyuncu === id })),
+      liste: liste.map((s, i) => ({ sira: i + 1, ad: s.ad, puan: s.puan, ben: s.oyuncu === id })),
       ben,
     };
+  }
+
+  // Oyuncunun güncel serisi (bugün ya da dün oynadıysa devam ediyor).
+  seri(id, bugun) {
+    const son = this.sql.exec("SELECT gun, seri FROM gun_ozet WHERE oyuncu = ? ORDER BY gun DESC LIMIT 1", id).toArray()[0];
+    return son && son.gun >= bugun - 1 ? son.seri : 0;
   }
 }

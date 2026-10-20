@@ -9,14 +9,15 @@ import { sonucKaydet } from "../ortak/istatistik.js";
 import { klavyeKur } from "../ortak/klavye.js";
 import { bildir } from "../ortak/arayuz.js";
 import { sayfaKur } from "../ortak/sayfa.js";
+import { siralamaKur, gunlukSonucuGonder } from "../ortak/siralama.js";
 
 const OYUN = "arada";
-const HAK = 18;
+const HAK = 15;
 const UZUNLUK = 5;
 const TEBRIK = [
   "Şans mı bu?", "İnanılmaz!", "İnanılmaz!", "Dâhiyane!", "Dâhiyane!", "Muhteşem!",
-  "Muhteşem!", "Harika!", "Harika!", "Çok iyi!", "Çok iyi!", "Güzel!",
-  "Güzel!", "İyi!", "İyi!", "Fena değil!", "Az kalsın!", "Kıl payı!",
+  "Muhteşem!", "Harika!", "Harika!", "Çok iyi!", "Güzel!", "Güzel!",
+  "İyi!", "Az kalsın!", "Kıl payı!",
 ];
 
 // Sözlük Türkçe alfabeye göre sıralı: C < Ç, G < Ğ, I < İ, O < Ö, S < Ş, U < Ü.
@@ -33,7 +34,11 @@ let ust; // aralığın üst ucu (sözlükteki sırası)
 let alt; // aralığın alt ucu
 let bitti = false;
 let kazandi = false;
+let basladi = null; // günlük oyunda ilk tuşa basılan an (sıralamadaki süre için)
+let bitisAni = null;
 
+siralamaKur(); // sayfaKur'dan önce: eklediği pencere de kapat düğmelerine bağlansın
+const gonderSonuc = gunlukSonucuGonder(OYUN);
 const sayfa = sayfaKur({ oyun: OYUN, hak: HAK, tebrik: TEBRIK, yeniOyun: baslat, paylasimMetni });
 const { alistirma, gun } = sayfa;
 
@@ -167,6 +172,7 @@ function salla() {
 }
 
 function tusaBasildi(tus) {
+  if (!basladi && !alistirma && !bitti) basladi = Date.now();
   if (bitti) return;
   if (tus === "gir") return gonder();
   if (tus === "sil") {
@@ -233,13 +239,23 @@ function bitir(sonuc) {
   } else {
     bildir(buyuk(cevap), 3000);
   }
-  if (!alistirma) sonucKaydet(OYUN, HAK, gun, kazandi, tahminler.length);
+  if (!alistirma) {
+    sonucKaydet(OYUN, HAK, gun, kazandi, tahminler.length);
+    bitisAni = Date.now();
+    kaydet();
+    siralamayaGonder();
+  }
   sayfa.sonucuGoster({ bitti, kazandi, tahminSayisi: tahminler.length, cevap }, 1700);
 }
 
 function kaydet() {
   if (alistirma) return;
-  yaz(`${OYUN}.gunluk`, { gun, tahminler, bitti, kazandi });
+  yaz(`${OYUN}.gunluk`, { gun, tahminler, bitti, kazandi, basladi, bitisAni });
+}
+
+function siralamayaGonder() {
+  const sure = basladi && bitisAni ? Math.round((bitisAni - basladi) / 1000) : null;
+  gonderSonuc({ gun, tahminler: [...tahminler], kazandi, sure });
 }
 
 function paylasimMetni() {
@@ -273,10 +289,21 @@ function baslat() {
   if (!alistirma) {
     const kayit = oku(`${OYUN}.gunluk`, null);
     if (kayit && kayit.gun === gun) {
-      kayit.tahminler.forEach(uygula);
+      kayit.tahminler.slice(0, HAK).forEach(uygula);
       bitti = kayit.bitti;
       kazandi = kayit.kazandi;
-      if (bitti) sayfa.sonucuGoster({ bitti, kazandi, tahminSayisi: tahminler.length, cevap }, 400);
+      basladi = kayit.basladi || null;
+      bitisAni = kayit.bitisAni || null;
+      // Hak sayısı 18'den 15'e indi: o gün 15 hakkını bitirmiş biri kaybetmiş sayılır.
+      if (!bitti && tahminler.length >= HAK) {
+        bitti = true;
+        sonucKaydet(OYUN, HAK, gun, false, tahminler.length);
+        kaydet();
+      }
+      if (bitti) {
+        sayfa.sonucuGoster({ bitti, kazandi, tahminSayisi: tahminler.length, cevap }, 400);
+        siralamayaGonder();
+      }
     }
   }
   ekraniGuncelle();

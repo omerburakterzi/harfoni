@@ -10,8 +10,9 @@
 //   POST /oyuncu/engel-kaldir { id, anahtar, no }
 //   POST /giris           { id, anahtar, saglayici, jeton, kod?, istemci? }  Google/Apple ile bağla ya da giriş yap
 //   POST /giris/kaldir    { id, anahtar, saglayici }         hesap bağını kaldır
-//   POST /klasik/sonuc    { id, anahtar, gun, tahminler, sure }  günlük Klasik sonucunu gönder
-//   POST /siralama        { donem, id?, anahtar? }            gun | hafta | ay sıralaması
+//   POST /gunluk/sonuc    { id, anahtar, oyun, gun, tahminler, sure }  günlük oyun sonucunu gönder
+//   POST /siralama        { donem, oyun?, id?, anahtar? }     gun | hafta | ay sıralaması
+//   POST /ozet            { id, anahtar }                     seri ve bu haftaki sıra
 //   GET  /yonetim                              şikâyetleri inceleme sayfası
 
 import { anahtarOzeti } from "./ozet.js";
@@ -19,7 +20,7 @@ import { odaAc } from "./kod.js";
 import { YONETIM_SAYFASI, yetkiliMi } from "./yonetim.js";
 import { jetonuDogrula } from "./giris.js";
 import { yenilemeJetonuAl, bagiKaldir } from "./apple.js";
-import { sonucuDegerlendir, supheliMi, donemAraligi, bugununNumarasi } from "./siralama.js";
+import { sonucuDegerlendir, supheliMi, donemAraligi, bugununNumarasi, OYUNLAR } from "./siralama.js";
 
 export { DuelloOdasi } from "./oda.js";
 export { Oyuncular } from "./oyuncular.js";
@@ -135,12 +136,13 @@ export default {
     // Sıralama herkese açık; kimlik verilirse oyuncunun kendi sırası da döner.
     if (url.pathname === "/siralama") {
       const donem = ["gun", "hafta", "ay"].includes(govde.donem) ? govde.donem : "gun";
+      const oyun = OYUNLAR[govde.oyun] ? govde.oyun : null;
       const [ilk, son] = donemAraligi(donem);
       let benimId = null;
       if (KIMLIK.test(govde.id) && KIMLIK.test(govde.anahtar)) {
         if (await oyuncular.dogrula(govde.id, await anahtarOzeti(govde.anahtar))) benimId = govde.id;
       }
-      return cevap({ donem, ilk, son, ...(await oyuncular.siralama(ilk, son, benimId)) }, kaynak);
+      return cevap({ donem, oyun, ilk, son, ...(await oyuncular.siralama(ilk, son, benimId, oyun)) }, kaynak);
     }
     const { id, anahtar } = govde;
     if (!KIMLIK.test(id) || !KIMLIK.test(anahtar)) return cevap({ hata: "Geçersiz kimlik" }, kaynak, 400);
@@ -179,21 +181,30 @@ export default {
       for (const j of jetonlar || []) await bagiKaldir(env, j.istemci, j.yenileme);
       return cevap({ tamam: Boolean(jetonlar) }, kaynak);
     }
-    if (url.pathname === "/klasik/sonuc") {
+    if (url.pathname === "/ozet") {
+      if (!(await oyuncular.dogrula(id, ozet))) return cevap({ hata: "Oyuncu bulunamadı" }, kaynak, 404);
+      const [ilk, son] = donemAraligi("hafta");
+      const hafta = await oyuncular.siralama(ilk, son, id);
+      return cevap({ seri: await oyuncular.seri(id, bugununNumarasi()), hafta: hafta.ben, toplam: hafta.toplam }, kaynak);
+    }
+    // /klasik/sonuc: Klasik'ten önceki sürümün adresi (1.0.2 uygulamaları kullanmıyor ama site bir süre kullandı)
+    if (url.pathname === "/gunluk/sonuc" || url.pathname === "/klasik/sonuc") {
+      const oyun = url.pathname === "/klasik/sonuc" ? "klasik" : govde.oyun;
+      if (!OYUNLAR[oyun]) return cevap({ hata: "Bilinmeyen oyun" }, kaynak, 400);
       const gun = Number(govde.gun);
       const bugun = bugununNumarasi();
       // Gece yarısını az geçe gönderilen dünkü sonuç da kabul edilir.
       if (!Number.isInteger(gun) || gun < bugun - 1 || gun > bugun) return cevap({ hata: "Bu günün sonucu artık gönderilemez" }, kaynak, 400);
-      const sonuc = sonucuDegerlendir(gun, govde.tahminler);
+      const sonuc = sonucuDegerlendir(oyun, gun, govde.tahminler);
       if (!sonuc) return cevap({ hata: "Sonuç doğrulanamadı" }, kaynak, 400);
       // Süre bilinmiyorsa eşitlikte en sona kalsın diye bir gün sayılır.
       const sureVar = Number.isFinite(govde.sure);
       const sure = sureVar ? Math.max(0, Math.min(24 * 3600, Math.round(govde.sure))) : 24 * 3600;
-      const kayit = await oyuncular.gunlukKaydet(id, ozet, gun, sonuc.puan, sonuc.tahmin, sure, !supheliMi(sonuc.tahmin, sureVar ? sure : null));
+      const kayit = await oyuncular.sonucKaydet(id, ozet, oyun, gun, sonuc.puan, sonuc.tahmin, sure, !supheliMi(sonuc.tahmin, sureVar ? sure : null));
       if (!kayit) return cevap({ hata: "Oyuncu bulunamadı" }, kaynak, 404);
       const [ilk, son] = donemAraligi("gun", gun);
       const gunluk = await oyuncular.siralama(ilk, son, id);
-      return cevap({ puan: kayit.puan, gecerli: Boolean(kayit.gecerli), sira: gunluk.ben, toplam: gunluk.toplam }, kaynak);
+      return cevap({ ...kayit, sira: gunluk.ben, toplam: gunluk.toplam }, kaynak);
     }
     if (url.pathname === "/oyuncu/engeller") {
       const liste = await oyuncular.engeller(id, ozet);
