@@ -148,6 +148,20 @@ export class Oyuncular extends DurableObject {
         if (e.gecerli) this.#gunuGuncelle(e.oyuncu, e.gun);
       }
     }
+    // Arkadaş grupları: davet koduyla katılınır, kendi sıralamaları olur.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS grup (
+      kod TEXT PRIMARY KEY,
+      ad TEXT NOT NULL,
+      kurucu TEXT NOT NULL,
+      olusturma INTEGER NOT NULL
+    )`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS grup_uye (
+      grup TEXT NOT NULL,
+      oyuncu TEXT NOT NULL,
+      zaman INTEGER NOT NULL,
+      PRIMARY KEY (grup, oyuncu)
+    )`);
+    this.sql.exec("CREATE INDEX IF NOT EXISTS grup_uye_oyuncu ON grup_uye (oyuncu)");
     // Kurallara uymayan oyuncu Düello'dan uzaklaştırılabilir.
     const sutunlar = this.sql.exec("PRAGMA table_info(oyuncu)").toArray().map((s) => s.name);
     if (!sutunlar.includes("yasakli")) this.sql.exec("ALTER TABLE oyuncu ADD COLUMN yasakli INTEGER NOT NULL DEFAULT 0");
@@ -253,6 +267,7 @@ export class Oyuncular extends DurableObject {
     this.sql.exec("DELETE FROM cihaz WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM gunluk WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM sonuc WHERE oyuncu = ?", id);
+    this.sql.exec("DELETE FROM grup_uye WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM gun_ozet WHERE oyuncu = ?", id);
     this.sql.exec("DELETE FROM sikayet WHERE sikayetci = ? OR hedef = ?", id, id);
     this.sql.exec("DELETE FROM oyuncu WHERE id = ?", id);
@@ -437,5 +452,107 @@ export class Oyuncular extends DurableObject {
   seri(id, bugun) {
     const son = this.sql.exec("SELECT gun, seri FROM gun_ozet WHERE oyuncu = ? ORDER BY gun DESC LIMIT 1", id).toArray()[0];
     return son && son.gun >= bugun - 1 ? son.seri : 0;
+  }
+
+  // ---------- Arkadaş grupları ----------
+
+  #puanlarSorgusu(oyun) {
+    return oyun
+      ? "SELECT oyuncu, puan, sure FROM sonuc WHERE gun BETWEEN ?1 AND ?2 AND gecerli = 1 AND oyun = ?3"
+      : `SELECT oyuncu, puan, sure FROM sonuc WHERE gun BETWEEN ?1 AND ?2 AND gecerli = 1
+         UNION ALL SELECT oyuncu, bonus, 0 FROM gun_ozet WHERE gun BETWEEN ?1 AND ?2`;
+  }
+
+  grupKur(id, anahtar, kod, ad) {
+    if (!this.dogrula(id, anahtar)) return { hata: "Oyuncu bulunamadı" };
+    if (this.#grupSayisi(id) >= 10) return { hata: "En fazla 10 gruba üye olabilirsin" };
+    if (this.sql.exec("SELECT 1 FROM grup WHERE kod = ?", kod).toArray().length) return { hata: "Tekrar dene" };
+    this.sql.exec("INSERT INTO grup (kod, ad, kurucu, olusturma) VALUES (?, ?, ?, ?)", kod, ad, id, Date.now());
+    this.sql.exec("INSERT INTO grup_uye (grup, oyuncu, zaman) VALUES (?, ?, ?)", kod, id, Date.now());
+    return { kod, ad };
+  }
+
+  #grupSayisi(id) {
+    return this.sql.exec("SELECT COUNT(*) AS n FROM grup_uye WHERE oyuncu = ?", id).one().n;
+  }
+
+  #grupBilgisi(kod) {
+    const grup = this.sql.exec("SELECT kod, ad, kurucu FROM grup WHERE kod = ?", kod).toArray()[0];
+    if (!grup) return null;
+    const uyeSayisi = this.sql.exec("SELECT COUNT(*) AS n FROM grup_uye WHERE grup = ?", kod).one().n;
+    return { kod: grup.kod, ad: grup.ad, kurucu: grup.kurucu, uyeSayisi };
+  }
+
+  // Davet linkini açan kişiye gösterilecek bilgi (üye olmasa da).
+  grupOnizleme(kod, id) {
+    const grup = this.#grupBilgisi(kod);
+    if (!grup) return null;
+    const uye = id ? this.sql.exec("SELECT 1 FROM grup_uye WHERE grup = ? AND oyuncu = ?", kod, id).toArray().length > 0 : false;
+    return { kod: grup.kod, ad: grup.ad, uyeSayisi: grup.uyeSayisi, uye };
+  }
+
+  grupKatil(id, anahtar, kod) {
+    if (!this.dogrula(id, anahtar)) return { hata: "Oyuncu bulunamadı" };
+    const grup = this.#grupBilgisi(kod);
+    if (!grup) return { hata: "Grup bulunamadı" };
+    const zatenUye = this.sql.exec("SELECT 1 FROM grup_uye WHERE grup = ? AND oyuncu = ?", kod, id).toArray().length;
+    if (!zatenUye) {
+      if (grup.uyeSayisi >= 50) return { hata: "Bu grup dolu (en fazla 50 kişi)" };
+      if (this.#grupSayisi(id) >= 10) return { hata: "En fazla 10 gruba üye olabilirsin" };
+      this.sql.exec("INSERT INTO grup_uye (grup, oyuncu, zaman) VALUES (?, ?, ?)", kod, id, Date.now());
+    }
+    return { kod, ad: grup.ad };
+  }
+
+  // Son üye ayrılınca grup da silinir.
+  grupAyril(id, anahtar, kod) {
+    if (!this.dogrula(id, anahtar)) return false;
+    this.sql.exec("DELETE FROM grup_uye WHERE grup = ? AND oyuncu = ?", kod, id);
+    if (!this.sql.exec("SELECT 1 FROM grup_uye WHERE grup = ?", kod).toArray().length) this.sql.exec("DELETE FROM grup WHERE kod = ?", kod);
+    return true;
+  }
+
+  gruplarim(id) {
+    return this.sql
+      .exec(
+        `SELECT g.kod, g.ad, (SELECT COUNT(*) FROM grup_uye x WHERE x.grup = g.kod) AS uyeSayisi
+         FROM grup_uye u JOIN grup g ON g.kod = u.grup WHERE u.oyuncu = ? ORDER BY u.zaman`,
+        id
+      )
+      .toArray();
+  }
+
+  // Grubun sıralaması: hiç oynamamış üyeler de 0 puanla listede.
+  grupSiralamasi(kod, ilk, son, id, oyun = null) {
+    const grup = this.#grupBilgisi(kod);
+    if (!grup) return null;
+    const ek = oyun ? [ilk, son, oyun] : [ilk, son];
+    const n = ek.length + 1;
+    const satirlar = this.sql
+      .exec(
+        `SELECT u.oyuncu, o.ad, COALESCE(SUM(p.puan), 0) AS puan, COALESCE(SUM(p.sure), 0) AS sure, COUNT(p.oyuncu) AS kayit
+         FROM grup_uye u JOIN oyuncu o ON o.id = u.oyuncu
+         LEFT JOIN (${this.#puanlarSorgusu(oyun)}) p ON p.oyuncu = u.oyuncu
+         WHERE u.grup = ?${n} AND o.yasakli = 0
+         GROUP BY u.oyuncu ORDER BY puan DESC, kayit = 0, sure ASC`,
+        ...ek, kod
+      )
+      .toArray();
+    const uye = satirlar.some((s) => s.oyuncu === id);
+    return {
+      grup: { kod: grup.kod, ad: grup.ad, uyeSayisi: grup.uyeSayisi },
+      uye,
+      toplam: satirlar.length,
+      liste: satirlar.map((s, i) => ({ sira: i + 1, ad: s.ad, puan: s.puan, oynadi: s.kayit > 0, ben: s.oyuncu === id })),
+    };
+  }
+
+  // Oyuncunun gruplarındaki sırası (sonuç penceresi ve ana sayfa için).
+  gruplardakiSiram(id, ilk, son) {
+    return this.gruplarim(id).map((g) => {
+      const s = this.grupSiralamasi(g.kod, ilk, son, id);
+      const ben = s.liste.find((x) => x.ben);
+      return { kod: g.kod, ad: g.ad, sira: ben?.sira, toplam: s.toplam };
+    });
   }
 }

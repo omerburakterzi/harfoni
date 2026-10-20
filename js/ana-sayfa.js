@@ -1,7 +1,7 @@
 // Ana sayfadaki "Harfoni Puanı" kutusu: bu haftaki sıra ve seri.
 // Profil yoksa sıralamaya nasıl katılınacağını söyler.
 
-import { kimlik, siralamayiAc } from "./ortak/siralama.js";
+import { kimlik, siralamayiAc, grupDavetiniIsle } from "./ortak/siralama.js";
 import { istek } from "./ortak/sunucu.js";
 
 const kutu = document.getElementById("puan-kutusu");
@@ -32,6 +32,8 @@ async function goster() {
     baslik.textContent = "Bu hafta henüz puanın yok";
     alt.textContent = "Bugünün bulmacalarını çöz, sıralamaya gir.";
   }
+  const grup = (veri.gruplar || []).find((g) => g.sira);
+  if (grup) alt.textContent += ` · ${grup.ad}: ${grup.sira}./${grup.toplam}`;
   seri.textContent = veri.seri ? `🔥 ${veri.seri}` : "🏆";
   seri.title = veri.seri ? `${veri.seri} günlük seri` : "";
   kutu.onclick = () => siralamayiAc("hafta", "hepsi");
@@ -39,3 +41,10 @@ async function goster() {
 }
 
 goster();
+
+// Grup davet linki: harfoni.com/?grup=KOD
+const davet = new URLSearchParams(location.search).get("grup");
+if (davet) {
+  history.replaceState(null, "", location.pathname);
+  grupDavetiniIsle(davet);
+}

@@ -9,6 +9,7 @@ export const WS_SUNUCU = SUNUCU.replace(/^http/, "ws");
 
 // Davet bağlantıları her zaman siteyi açar; arkadaşın uygulamayı yüklemeden oynayabilir.
 export const DUELLO_ADRESI = YEREL ? location.origin + location.pathname : "https://harfoni.com/duello.html";
+export const SITE_ADRESI = YEREL ? `${location.origin}/` : "https://harfoni.com/";
 
 export async function istek(yol, govde) {
   let yanit;

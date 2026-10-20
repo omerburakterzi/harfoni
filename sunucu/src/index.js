@@ -13,10 +13,14 @@
 //   POST /gunluk/sonuc    { id, anahtar, oyun, gun, tahminler, sure }  günlük oyun sonucunu gönder
 //   POST /siralama        { donem, oyun?, id?, anahtar? }     gun | hafta | ay sıralaması
 //   POST /ozet            { id, anahtar }                     seri ve bu haftaki sıra
+//   POST /grup/kur        { id, anahtar, ad }                 arkadaş grubu kur
+//   POST /grup/bilgi      { kod, id?, anahtar? }              davet linkindeki grubun adı
+//   POST /grup/katil      { id, anahtar, kod }  /grup/ayril   gruba katıl / gruptan ayrıl
+//   POST /gruplarim       { id, anahtar }                     üye olduğun gruplar
 //   GET  /yonetim                              şikâyetleri inceleme sayfası
 
 import { anahtarOzeti } from "./ozet.js";
-import { odaAc } from "./kod.js";
+import { odaAc, kodUret } from "./kod.js";
 import { YONETIM_SAYFASI, yetkiliMi } from "./yonetim.js";
 import { jetonuDogrula } from "./giris.js";
 import { yenilemeJetonuAl, bagiKaldir } from "./apple.js";
@@ -56,6 +60,14 @@ function kabaMi(ad) {
   const bitisik = kucuk.replace(/[^\p{L}]/gu, "");
   if (YASAK_KOKLER.some((kok) => bitisik.includes(kok))) return true;
   return kucuk.split(/[^\p{L}]+/u).some((kelime) => YASAK_KELIMELER.includes(kelime));
+}
+
+// Grup adı: 2-24 karakter, takma adla aynı kurallar.
+function grupAdiTemizle(ad) {
+  const temiz = String(ad || "").replace(/\s+/g, " ").trim();
+  if ([...temiz].length < 2 || [...temiz].length > 24) return null;
+  if (!/^[\p{L}\p{N} _.\-]+$/u.test(temiz) || kabaMi(temiz)) return null;
+  return temiz;
 }
 
 // Takma ad: 2-16 karakter; harf, rakam, boşluk ve _ . - olabilir.
@@ -142,7 +154,22 @@ export default {
       if (KIMLIK.test(govde.id) && KIMLIK.test(govde.anahtar)) {
         if (await oyuncular.dogrula(govde.id, await anahtarOzeti(govde.anahtar))) benimId = govde.id;
       }
+      if (govde.grup) {
+        // Grup sıralamasını sadece üyeler görür.
+        const sonuc = await oyuncular.grupSiralamasi(String(govde.grup), ilk, son, benimId, oyun);
+        if (!sonuc) return cevap({ hata: "Grup bulunamadı" }, kaynak, 404);
+        if (!sonuc.uye) return cevap({ hata: "Bu grubun üyesi değilsin" }, kaynak, 403);
+        return cevap({ donem, oyun, ilk, son, ...sonuc }, kaynak);
+      }
       return cevap({ donem, oyun, ilk, son, ...(await oyuncular.siralama(ilk, son, benimId, oyun)) }, kaynak);
+    }
+    if (url.pathname === "/grup/bilgi") {
+      let benimId = null;
+      if (KIMLIK.test(govde.id) && KIMLIK.test(govde.anahtar)) {
+        if (await oyuncular.dogrula(govde.id, await anahtarOzeti(govde.anahtar))) benimId = govde.id;
+      }
+      const grup = await oyuncular.grupOnizleme(String(govde.kod || "").toUpperCase(), benimId);
+      return grup ? cevap(grup, kaynak) : cevap({ hata: "Grup bulunamadı" }, kaynak, 404);
     }
     const { id, anahtar } = govde;
     if (!KIMLIK.test(id) || !KIMLIK.test(anahtar)) return cevap({ hata: "Geçersiz kimlik" }, kaynak, 400);
@@ -185,7 +212,31 @@ export default {
       if (!(await oyuncular.dogrula(id, ozet))) return cevap({ hata: "Oyuncu bulunamadı" }, kaynak, 404);
       const [ilk, son] = donemAraligi("hafta");
       const hafta = await oyuncular.siralama(ilk, son, id);
-      return cevap({ seri: await oyuncular.seri(id, bugununNumarasi()), hafta: hafta.ben, toplam: hafta.toplam }, kaynak);
+      return cevap(
+        { seri: await oyuncular.seri(id, bugununNumarasi()), hafta: hafta.ben, toplam: hafta.toplam, gruplar: await oyuncular.gruplardakiSiram(id, ilk, son) },
+        kaynak
+      );
+    }
+    if (url.pathname === "/grup/kur") {
+      const ad = grupAdiTemizle(govde.ad);
+      if (!ad) return cevap({ hata: "Grup adı 2-24 karakter olmalı; harf, rakam ve boşluk kullanabilirsin" }, kaynak, 400);
+      for (let deneme = 0; deneme < 5; deneme++) {
+        const sonuc = await oyuncular.grupKur(id, ozet, kodUret(), ad);
+        if (sonuc.kod) return cevap(sonuc, kaynak);
+        if (sonuc.hata !== "Tekrar dene") return cevap(sonuc, kaynak, 400);
+      }
+      return cevap({ hata: "Grup kurulamadı, tekrar dene" }, kaynak, 500);
+    }
+    if (url.pathname === "/grup/katil") {
+      const sonuc = await oyuncular.grupKatil(id, ozet, String(govde.kod || "").toUpperCase());
+      return cevap(sonuc, kaynak, sonuc.hata ? 400 : 200);
+    }
+    if (url.pathname === "/grup/ayril") {
+      return cevap({ tamam: await oyuncular.grupAyril(id, ozet, String(govde.kod || "").toUpperCase()) }, kaynak);
+    }
+    if (url.pathname === "/gruplarim") {
+      if (!(await oyuncular.dogrula(id, ozet))) return cevap({ hata: "Oyuncu bulunamadı" }, kaynak, 404);
+      return cevap(await oyuncular.gruplarim(id), kaynak);
     }
     // /klasik/sonuc: Klasik'ten önceki sürümün adresi (1.0.2 uygulamaları kullanmıyor ama site bir süre kullandı)
     if (url.pathname === "/gunluk/sonuc" || url.pathname === "/klasik/sonuc") {
@@ -204,7 +255,8 @@ export default {
       if (!kayit) return cevap({ hata: "Oyuncu bulunamadı" }, kaynak, 404);
       const [ilk, son] = donemAraligi("gun", gun);
       const gunluk = await oyuncular.siralama(ilk, son, id);
-      return cevap({ ...kayit, sira: gunluk.ben, toplam: gunluk.toplam }, kaynak);
+      const gruplar = await oyuncular.gruplardakiSiram(id, gun, gun);
+      return cevap({ ...kayit, sira: gunluk.ben, toplam: gunluk.toplam, gruplar }, kaynak);
     }
     if (url.pathname === "/oyuncu/engeller") {
       const liste = await oyuncular.engeller(id, ozet);

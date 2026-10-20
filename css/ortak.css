@@ -975,3 +975,25 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
 .pk-metin strong { display: block; font-size: 1.05rem; }
 .pk-metin small { display: block; margin-top: 2px; font-size: 0.82rem; opacity: 0.9; }
 .pk-seri { flex: none; font-size: 1.3rem; font-weight: 800; }
+
+/* ---- Arkadaş grupları ---- */
+.kapsam-satiri { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.kapsam-satiri select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--cizgi);
+  border-radius: 999px;
+  background: var(--zemin);
+  color: var(--yazi);
+  font: inherit;
+  font-weight: 600;
+}
+.duz-dugme.kucuk { margin: 0; padding: 6px 12px; font-size: 0.82rem; width: auto; max-width: none; }
+.grup-yeni { display: grid; gap: 8px; margin-bottom: 12px; padding: 12px; border-radius: var(--yaricap); background: var(--yumusak); }
+.grup-yeni .ad-formu { margin: 0; }
+.grup-yeni .ad-formu input { padding: 8px 12px; font-size: 0.95rem; }
+.grup-yeni .ana-dugme, .grup-yeni .duz-dugme { margin: 0; flex: none; width: auto; padding: 8px 16px; }
+.grup-araclari { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+.grup-araclari .soluk-yazi { margin-right: auto; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em; }
+.siralama-liste li.oynamadi { opacity: 0.5; }

@@ -711,6 +711,9 @@ async function basla() {
     olay.preventDefault();
     try {
       await adKaydet($("ad-girisi").value);
+      // Başka bir sayfadan (ör. grup daveti) takma ad seçmeye gelindiyse oraya dön.
+      const donus = parametreler.get("donus");
+      if (donus && donus.startsWith("./")) return (location.href = donus);
       if (odaKodu) baglan();
       else ekranGoster("lobi");
     } catch (hata) {

@@ -1,7 +1,7 @@
 // Oda kodları: 6 karakter. Karıştırılabilecek harfler (O/0, I/1, L) yok.
 const KOD_HARFLERI = "ABCDEFGHJKMNPRSTUVYZ23456789";
 
-function kodUret() {
+export function kodUret() {
   const sayilar = crypto.getRandomValues(new Uint8Array(6));
   return [...sayilar].map((s) => KOD_HARFLERI[s % KOD_HARFLERI.length]).join("");
 }

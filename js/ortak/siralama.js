@@ -3,10 +3,14 @@
 // bugünün / bu haftanın / bu ayın listesini gösterir. Sayfaya gereken düğme
 // ve pencereyi kendisi ekler. Sıralamaya katılmak için Düello'daki takma ad
 // (profil) kullanılır.
+//
+// Arkadaş grupları: sıralama penceresinin üstündeki seçiciden "Herkes" ya da
+// bir grup seçilir. Gruba davet linkiyle (harfoni.com/?grup=KOD) ya da kodla
+// katılınır.
 
 import { oku, yaz } from "./depo.js";
-import { istek } from "./sunucu.js";
-import { pencereAc } from "./arayuz.js";
+import { istek, SITE_ADRESI } from "./sunucu.js";
+import { pencereAc, bildir, paylas } from "./arayuz.js";
 
 const $ = (id) => document.getElementById(id);
 const DONEM_ADI = { gun: "Bugün", hafta: "Bu hafta", ay: "Bu ay" };
@@ -22,6 +26,11 @@ export function kimlik() {
 
 let acikDonem = "hafta";
 let acikOyun = "hepsi";
+let acikGrup = null; // null = herkes
+let gruplar = [];
+let sonVeri = null;
+
+const grupAdresi = (kod) => `${SITE_ADRESI}?grup=${kod}`;
 
 // ---------- Sayfaya eklenenler ----------
 
@@ -33,6 +42,26 @@ function pencereyiEkle() {
   pencere.innerHTML = `
     <button class="kapat" type="button" data-kapat aria-label="Kapat">×</button>
     <h2>Sıralama</h2>
+    <div class="kapsam-satiri">
+      <select id="siralama-kapsam" aria-label="Kimlerle"><option value="">Herkes</option></select>
+      <button id="grup-yeni-ac" class="duz-dugme cerceveli kucuk" type="button">＋ Grup</button>
+    </div>
+    <div id="grup-yeni" class="grup-yeni" hidden>
+      <form id="grup-kur-formu" class="ad-formu">
+        <input id="grup-adi" type="text" maxlength="24" placeholder="Grup adı (ör. Ofis, Aile)" required>
+        <button class="ana-dugme" type="submit">Kur</button>
+      </form>
+      <form id="grup-katil-formu" class="ad-formu">
+        <input id="grup-kodu" type="text" maxlength="6" placeholder="Davet kodu" autocapitalize="characters" required>
+        <button class="duz-dugme cerceveli" type="submit">Katıl</button>
+      </form>
+    </div>
+    <div id="grup-araclari" class="grup-araclari" hidden>
+      <span id="grup-kod-yazisi" class="soluk-yazi"></span>
+      <button id="grup-davet" class="duz-dugme cerceveli kucuk" type="button">Davet et</button>
+      <button id="grup-paylas" class="duz-dugme cerceveli kucuk" type="button">Paylaş</button>
+      <button id="grup-ayril" class="duz-dugme kucuk tehlike" type="button">Ayrıl</button>
+    </div>
     <div class="sekmeler" role="tablist">
       ${Object.entries(DONEM_ADI).map(([d, ad]) => `<button type="button" data-donem="${d}">${ad}</button>`).join("")}
     </div>
@@ -62,6 +91,121 @@ function pencereyiEkle() {
   });
   for (const d of pencere.querySelectorAll("[data-donem]")) d.addEventListener("click", () => listeyiDoldur(d.dataset.donem, acikOyun));
   for (const o of pencere.querySelectorAll("[data-oyun]")) o.addEventListener("click", () => listeyiDoldur(acikDonem, o.dataset.oyun));
+  grupDugmeleriniBagla();
+}
+
+// ---------- Gruplar ----------
+
+async function gruplariYukle() {
+  const k = kimlik();
+  const secici = $("siralama-kapsam");
+  $("grup-yeni-ac").hidden = !k;
+  if (!k) {
+    gruplar = [];
+  } else {
+    try {
+      gruplar = await istek("/gruplarim", k);
+    } catch {
+      gruplar = [];
+    }
+  }
+  secici.innerHTML = `<option value="">Herkes</option>` + gruplar.map((g) => `<option value="${g.kod}"></option>`).join("");
+  gruplar.forEach((g, i) => (secici.options[i + 1].textContent = `${g.ad} (${g.uyeSayisi})`));
+  if (acikGrup && !gruplar.some((g) => g.kod === acikGrup)) acikGrup = null;
+  secici.value = acikGrup || "";
+  secici.hidden = !gruplar.length;
+}
+
+function grupDugmeleriniBagla() {
+  $("siralama-kapsam").addEventListener("change", (e) => {
+    acikGrup = e.target.value || null;
+    listeyiDoldur(acikDonem, acikOyun);
+  });
+  $("grup-yeni-ac").addEventListener("click", () => ($("grup-yeni").hidden = !$("grup-yeni").hidden));
+  $("grup-kur-formu").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const grup = await istek("/grup/kur", { ...kimlik(), ad: $("grup-adi").value });
+      $("grup-adi").value = "";
+      $("grup-yeni").hidden = true;
+      acikGrup = grup.kod;
+      await gruplariYukle();
+      listeyiDoldur(acikDonem, acikOyun);
+      bildir(`"${grup.ad}" kuruldu. Şimdi arkadaşlarını davet et!`, 3000);
+    } catch (hata) {
+      bildir(hata.message, 3000);
+    }
+  });
+  $("grup-katil-formu").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await grubaKatil($("grup-kodu").value.trim().toUpperCase());
+  });
+  $("grup-davet").addEventListener("click", () => {
+    const grup = gruplar.find((g) => g.kod === acikGrup);
+    if (grup) paylas(`Harfoni'de "${grup.ad}" grubuna katıl, her gün kim daha iyi görelim! 🏆\nDavet kodu: ${grup.kod}\n${grupAdresi(grup.kod)}`);
+  });
+  $("grup-paylas").addEventListener("click", () => {
+    const grup = gruplar.find((g) => g.kod === acikGrup);
+    if (!grup || !sonVeri) return;
+    const madalya = ["🥇", "🥈", "🥉"];
+    const satirlar = sonVeri.liste
+      .filter((s) => s.oynadi)
+      .slice(0, 10)
+      .map((s, i) => `${madalya[i] || `${s.sira}.`} ${s.ad} · ${s.puan}`);
+    paylas(`Harfoni · ${grup.ad} · ${DONEM_ADI[acikDonem]}${acikOyun === "hepsi" ? "" : ` (${OYUN_ADI[acikOyun]})`}\n\n${satirlar.join("\n") || "Henüz kimse oynamadı"}\n\nKatıl: ${grupAdresi(grup.kod)}`);
+  });
+  $("grup-ayril").addEventListener("click", async () => {
+    const grup = gruplar.find((g) => g.kod === acikGrup);
+    if (!grup || !confirm(`"${grup.ad}" grubundan ayrılmak istiyor musun?`)) return;
+    await istek("/grup/ayril", { ...kimlik(), kod: grup.kod }).catch(() => {});
+    acikGrup = null;
+    await gruplariYukle();
+    listeyiDoldur(acikDonem, acikOyun);
+  });
+}
+
+async function grubaKatil(kod) {
+  try {
+    const grup = await istek("/grup/katil", { ...kimlik(), kod });
+    $("grup-kodu").value = "";
+    $("grup-yeni").hidden = true;
+    acikGrup = grup.kod;
+    await gruplariYukle();
+    listeyiDoldur(acikDonem, acikOyun);
+    bildir(`"${grup.ad}" grubuna katıldın!`, 3000);
+    return true;
+  } catch (hata) {
+    bildir(hata.message, 3000);
+    return false;
+  }
+}
+
+// Ana sayfada ?grup=KOD ile gelindiğinde: gruba katılma daveti.
+export async function grupDavetiniIsle(kod) {
+  kod = String(kod || "").toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(kod)) return;
+  let grup;
+  try {
+    grup = await istek("/grup/bilgi", { kod, ...(kimlik() || {}) });
+  } catch {
+    return bildir("Bu davet linki geçersiz ya da grup silinmiş", 3000);
+  }
+  if (grup.uye) {
+    acikGrup = grup.kod;
+    return siralamayiAc("hafta", "hepsi");
+  }
+  if (!kimlik()) {
+    // Önce takma ad; Düello sayfası seçimden sonra buraya geri döndürür.
+    if (confirm(`"${grup.ad}" grubuna katılmak için önce bir takma ad seçmelisin. Şimdi seçelim mi?`)) {
+      location.href = `duello.html?donus=${encodeURIComponent(`./?grup=${kod}`)}`;
+    }
+    return;
+  }
+  if (confirm(`"${grup.ad}" grubuna (${grup.uyeSayisi} kişi) katılmak istiyor musun?`)) {
+    pencereyiEkle();
+    pencereAc("siralama-penceresi");
+    if (await grubaKatil(kod)) return;
+  }
 }
 
 function ustDugmeyiEkle() {
@@ -112,10 +256,15 @@ function ozetiGoster(oyun, sonuc) {
     if (sonuc.oyunSayisi >= 4) satirlar.push("Dört oyunun dördü de bitti: <strong>+20</strong>");
     if (sonuc.seri >= 3) satirlar.push(`🔥 ${sonuc.seri} günlük seri: <strong>+${sonuc.seri >= 7 ? 20 : 10}</strong>`);
     if (sonuc.sira) satirlar.push(`Bugün ${sonuc.toplam} kişi arasında <strong>${sonuc.sira.sira}.</strong> sıradasın (ilk %${sonuc.sira.yuzde})`);
+    for (const g of sonuc.gruplar || []) {
+      if (g.sira) satirlar.push(`<span class="grup-sirasi"></span> grubunda bugün <strong>${g.sira}.</strong> / ${g.toplam}`);
+    }
   } else {
     satirlar.push("Bu sonuç sıralamaya alınmadı.");
   }
   kap.innerHTML = satirlar.map((s) => `<p>${s}</p>`).join("");
+  // Grup adları kullanıcıdan geldiği için metin olarak yazılır.
+  kap.querySelectorAll(".grup-sirasi").forEach((el, i) => (el.textContent = (sonuc.gruplar || []).filter((g) => g.sira)[i].ad));
   const dugme = document.createElement("button");
   dugme.type = "button";
   dugme.className = "duz-dugme cerceveli";
@@ -150,21 +299,29 @@ async function listeyiDoldur(donem, oyun) {
   acikOyun = oyun;
   for (const d of document.querySelectorAll("#siralama-penceresi [data-donem]")) d.classList.toggle("secili", d.dataset.donem === donem);
   for (const o of document.querySelectorAll("#siralama-penceresi [data-oyun]")) o.classList.toggle("secili", o.dataset.oyun === oyun);
+  const grup = gruplar.find((g) => g.kod === acikGrup);
+  $("grup-araclari").hidden = !grup;
+  if (grup) $("grup-kod-yazisi").textContent = `Kod: ${grup.kod}`;
   const liste = $("siralama-liste");
   liste.innerHTML = `<li class="soluk-yazi">Yükleniyor…</li>`;
   let veri;
   try {
-    veri = await istek("/siralama", { donem, oyun: oyun === "hepsi" ? null : oyun, ...(kimlik() || {}) });
+    veri = await istek("/siralama", { donem, oyun: oyun === "hepsi" ? null : oyun, grup: acikGrup, ...(kimlik() || {}) });
   } catch (hata) {
     liste.innerHTML = `<li class="soluk-yazi">${hata.message}</li>`;
     return;
   }
-  if (acikDonem !== donem || acikOyun !== oyun) return;
-  $("siralama-bilgi").textContent = veri.toplam ? `${DONEM_ADI[donem]} ${veri.toplam} kişi puan aldı.` : `${DONEM_ADI[donem]} henüz kimse yok. İlk sen ol!`;
+  if (acikDonem !== donem || acikOyun !== oyun || veri.grup?.kod !== (acikGrup || undefined)) return;
+  sonVeri = veri;
+  $("siralama-bilgi").textContent = grup
+    ? `${grup.ad} · ${veri.toplam} üye`
+    : veri.toplam
+      ? `${DONEM_ADI[donem]} ${veri.toplam} kişi puan aldı.`
+      : `${DONEM_ADI[donem]} henüz kimse yok. İlk sen ol!`;
   liste.innerHTML = "";
   for (const s of veri.liste) {
     const li = document.createElement("li");
-    if (s.ben) li.className = "ben";
+    li.className = [s.ben ? "ben" : "", s.oynadi === false ? "oynamadi" : ""].join(" ").trim();
     li.innerHTML = `<span class="sira-no">${s.sira}</span><span class="sira-ad"></span><span class="sira-puan">${s.puan}</span>`;
     li.querySelector(".sira-ad").textContent = s.ad;
     liste.appendChild(li);
@@ -176,8 +333,9 @@ async function listeyiDoldur(donem, oyun) {
   $("siralama-katil").hidden = Boolean(kimlik());
 }
 
-export function siralamayiAc(donem = acikDonem, oyun = acikOyun) {
+export async function siralamayiAc(donem = acikDonem, oyun = acikOyun) {
   pencereyiEkle();
   pencereAc("siralama-penceresi");
+  await gruplariYukle();
   listeyiDoldur(donem, oyun);
 }
