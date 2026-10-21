@@ -116,7 +116,6 @@ otobüs
 tebrik
 trafik
 eyalet
-şiddet
 sohbet
 emekli
 keskin
@@ -124,7 +123,6 @@ mucize
 mahkum
 kimlik
 rahibe
-cenaze
 toprak
 merkez
 korkak
@@ -186,7 +184,6 @@ toplum
 düzine
 çatlak
 samimi
-travma
 kaynak
 komuta
 fıstık
@@ -323,7 +320,6 @@ muhtaç
 mahrum
 küstah
 satıcı
-deprem
 yastık
 mahsur
 yengeç
@@ -352,7 +348,6 @@ stüdyo
 kazanç
 yabani
 akraba
-salgın
 yaprak
 hoşnut
 gayret
@@ -672,7 +667,6 @@ kavram
 kırbaç
 manşet
 kaynar
-cellat
 ikamet
 parola
 kıtlık
@@ -800,7 +794,6 @@ pancar
 tutkun
 zamane
 tasdik
-zayiat
 seyrek
 sismik
 bağnaz
@@ -816,7 +809,6 @@ sahici
 maskot
 atmaca
 firari
-şarbon
 tasarı
 yorgan
 tırmık
@@ -824,7 +816,6 @@ balkon
 yapboz
 sürahi
 cırcır
-kolera
 kindar
 katran
 kaleci

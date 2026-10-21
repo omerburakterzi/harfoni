@@ -75,7 +75,7 @@ export const DUGUMLER = {
   zorlu: { ad: "Zorlu bulmaca", simge: "" },
   pazar: { ad: "Pazar", simge: "🧺" },
   cesme: { ad: "Çeşme", simge: "⛲" },
-  surpriz: { ad: "Sürpriz", simge: "❔" },
+  surpriz: { ad: "Sürpriz", simge: "?" },
   miniboss: { ad: "Mini boss", simge: "" },
   bekci: { ad: "Ada bekçisi", simge: "" },
 };
