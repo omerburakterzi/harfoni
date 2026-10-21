@@ -32,18 +32,34 @@ export const YONETIM_SAYFASI = `<!doctype html>
   button.ana { background:var(--dogru); border-color:var(--dogru); color:#fff; }
   button.tehlike { color:var(--kirmizi); border-color:var(--kirmizi); }
   input { padding:8px 12px; border:1px solid var(--cizgi); border-radius:8px; background:var(--yuzey); color:var(--yazi); width:100%; max-width:360px; }
+  .sekmeler { display:flex; gap:8px; margin-bottom:16px; }
+  .toplamlar { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; margin-bottom:12px; }
+  .toplamlar div { background:var(--yuzey); border:1px solid var(--cizgi); border-radius:10px; padding:10px 12px; }
+  .toplamlar strong { display:block; font-size:1.4rem; }
+  .toplamlar span { color:var(--soluk); font-size:.8rem; }
+  .tablo-kap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:.88rem; font-variant-numeric:tabular-nums; }
+  th, td { padding:6px 8px; border-bottom:1px solid var(--cizgi); text-align:right; white-space:nowrap; }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:var(--soluk); font-weight:600; }
   .etiket { display:inline-block; padding:1px 8px; border-radius:999px; background:var(--kirmizi); color:#fff; font-size:.75rem; margin-left:6px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Harfoni · Şikâyetler</h1>
+  <h1>Harfoni · Yönetim</h1>
+  <nav class="sekmeler"><button id="sekme-istatistik" class="ana">İstatistikler</button><button id="sekme-sikayet">Şikâyetler</button></nav>
+  <section id="istatistik" hidden>
+    <div id="toplamlar" class="toplamlar"></div>
+    <p class="soluk">Sadece takma adı olan oyuncuların bitirdiği günlük oyunlar sayılır; gerçek oynanma bunun üstündedir. Düello: puanlı maçlar (bot ve puansız hariç).</p>
+    <div class="tablo-kap"><table id="gunler"></table></div>
+  </section>
   <form id="giris" hidden>
     <p>Yönetim anahtarını gir (bilgisayarındaki <code>Harfoni-Anahtarlar/yonetim-anahtari.txt</code> dosyasında).</p>
     <input id="anahtar" type="password" autocomplete="current-password">
     <div class="dugmeler"><button class="ana">Giriş</button></div>
   </form>
-  <div id="liste"></div>
+  <div id="liste" hidden></div>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -87,14 +103,35 @@ async function yukle() {
   }
 }
 
+async function istatistikYukle() {
+  const v = await api("/yonetim/istatistik");
+  const t = v.toplam;
+  const kutu = (deger, ad) => '<div><strong>' + deger + '</strong><span>' + ad + '</span></div>';
+  $("toplamlar").innerHTML = kutu(t.oyuncu, "takma adlı oyuncu") + kutu(t.hesapBagli, "Google/Apple bağlı") + kutu(t.gunlukSonuc, "bitirilen günlük oyun") +
+    kutu(t.duelloMaci, "puanlı Düello maçı") + kutu(t.grup, "grup") + kutu(t.grupUyeligi, "grup üyeliği");
+  const basliklar = ["Tarih", "Kişi", "Klasik", "Palavra", "Arada", "Muamma", "4'ü de", "Düello", "Yeni oyuncu"];
+  $("gunler").innerHTML = "<tr>" + basliklar.map((b) => "<th>" + b + "</th>").join("") + "</tr>" +
+    v.gunler.map((g) => "<tr><td>" + g.tarih.slice(8, 10) + "." + g.tarih.slice(5, 7) + "</td><td>" + [g.kisi, g.klasik, g.palavra, g.arada, g.muamma, g.dordu, g.duello, g.yeniOyuncu].join("</td><td>") + "</td></tr>").join("");
+}
+
+function sekme(ad) {
+  $("istatistik").hidden = ad !== "istatistik";
+  $("liste").hidden = ad !== "sikayet";
+  $("sekme-istatistik").className = ad === "istatistik" ? "ana" : "";
+  $("sekme-sikayet").className = ad === "sikayet" ? "ana" : "";
+  (ad === "istatistik" ? istatistikYukle() : yukle()).catch(() => {});
+}
+$("sekme-istatistik").onclick = () => sekme("istatistik");
+$("sekme-sikayet").onclick = () => sekme("sikayet");
+
 $("giris").onsubmit = (e) => {
   e.preventDefault();
   anahtar = $("anahtar").value.trim();
   localStorage.setItem("yonetim-anahtari", anahtar);
   $("giris").hidden = true;
-  yukle().catch(() => {});
+  sekme("istatistik");
 };
-if (anahtar) yukle().catch(() => {}); else $("giris").hidden = false;
+if (anahtar) sekme("istatistik"); else $("giris").hidden = false;
 </script>
 </body>
 </html>`;

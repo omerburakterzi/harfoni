@@ -616,4 +616,43 @@ export class Oyuncular extends DurableObject {
       ben,
     };
   }
+
+  // ---------- Yönetim: istatistikler ----------
+
+  // Son "gunSayisi" günün özeti. Sadece takma adı olanların bitirdiği oyunlar
+  // sayılır; gerçek oynanma bunun üstündedir.
+  istatistik(bugun, gunSayisi = 14) {
+    const ilk = bugun - gunSayisi + 1;
+    const GUN_MS = 24 * 60 * 60 * 1000;
+    const BASLANGIC = Date.UTC(2026, 9, 1);
+    // Türkiye saatine göre "zaman" sütunundan gün numarası
+    const gunNo = `CAST((zaman + 10800000 - ${BASLANGIC}) / ${GUN_MS} AS INTEGER) + 1`;
+
+    const oyunlar = this.sql.exec("SELECT gun, oyun, COUNT(*) AS n FROM sonuc WHERE gun >= ? GROUP BY gun, oyun", ilk).toArray();
+    const kisiler = this.sql.exec("SELECT gun, COUNT(DISTINCT oyuncu) AS n FROM sonuc WHERE gun >= ? GROUP BY gun", ilk).toArray();
+    const dordu = this.sql.exec("SELECT gun, COUNT(*) AS n FROM gun_ozet WHERE gun >= ? AND oyun_sayisi >= 4 GROUP BY gun", ilk).toArray();
+    // mac_kaydi'nda her maç iki satır (iki oyuncu)
+    const maclar = this.sql.exec(`SELECT ${gunNo} AS gun, COUNT(*) / 2 AS n FROM mac_kaydi GROUP BY gun HAVING gun >= ?`, ilk).toArray();
+    const yeniler = this.sql.exec(`SELECT ${gunNo.replace("zaman", "olusturma")} AS gun, COUNT(*) AS n FROM oyuncu GROUP BY gun HAVING gun >= ?`, ilk).toArray();
+
+    const gunler = [];
+    for (let g = bugun; g >= ilk; g--) {
+      const bul = (liste) => liste.find((x) => x.gun === g)?.n || 0;
+      const gun = { gun: g, tarih: new Date(BASLANGIC + (g - 1) * GUN_MS).toISOString().slice(0, 10), kisi: bul(kisiler), dordu: bul(dordu), duello: bul(maclar), yeniOyuncu: bul(yeniler) };
+      for (const oyun of ["klasik", "palavra", "arada", "muamma"]) gun[oyun] = oyunlar.find((x) => x.gun === g && x.oyun === oyun)?.n || 0;
+      gunler.push(gun);
+    }
+    const tek = (sorgu) => this.sql.exec(sorgu).one().n;
+    return {
+      gunler,
+      toplam: {
+        oyuncu: tek("SELECT COUNT(*) AS n FROM oyuncu"),
+        hesapBagli: tek("SELECT COUNT(DISTINCT oyuncu) AS n FROM hesap"),
+        grup: tek("SELECT COUNT(*) AS n FROM grup"),
+        grupUyeligi: tek("SELECT COUNT(*) AS n FROM grup_uye"),
+        duelloMaci: tek("SELECT COUNT(*) / 2 AS n FROM mac_kaydi"),
+        gunlukSonuc: tek("SELECT COUNT(*) AS n FROM sonuc"),
+      },
+    };
+  }
 }

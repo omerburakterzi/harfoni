@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#121417" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+  <meta name="robots" content="noindex">
+  <meta name="description" content="Adadan adaya kelime bulmacaları çöz, tılsım topla, boss'ları yen.">
+  <title>Harf Adaları · Harfoni</title>
+  <link rel="stylesheet" href="css/ortak.css">
+  <link rel="stylesheet" href="css/adalar.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <script defer src="js/olcum.js"></script>
+  <link rel="icon" href="gorseller/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="gorseller/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Harfoni">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+  <div class="oyun-sayfasi adalar">
+    <header class="ust">
+      <a class="ikon-dugme" id="geri" href="./" aria-label="Geri">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z"/></svg>
+      </a>
+      <div class="baslik">
+        <h1>Harf Adaları</h1>
+        <span class="gun-no">Deneme sürümü</span>
+      </div>
+      <div class="ust-sag">
+        <button class="ikon-dugme" type="button" data-ac="yardim-penceresi" aria-label="Nasıl oynanır">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="sefer-bilgi" class="sefer-bilgi" hidden></div>
+    <main id="ekran" class="ekran"></main>
+    <div id="klavye" class="klavye" hidden></div>
+  </div>
+
+  <div id="bildirimler" class="bildirimler" aria-live="polite"></div>
+
+  <dialog id="yardim-penceresi" class="pencere">
+    <button class="kapat" type="button" data-kapat aria-label="Kapat">×</button>
+    <h2>Nasıl oynanır?</h2>
+    <p>Bir <strong>sefer</strong>de adanın haritasında aşağıdan yukarı ilerlersin. Her katmanda bulunduğun yere bağlı duraklardan birini seçersin. En tepede <strong>ada bekçisi</strong> bekler.</p>
+    <h3>Bulmacalar</h3>
+    <p>Kelimeyi Klasik'teki gibi bul: <span class="renk-etiketi" data-durum="dogru">turkuaz</span> doğru yerde, <span class="renk-etiketi" data-durum="var">turuncu</span> başka yerde, <span class="renk-etiketi" data-durum="yok">gri</span> kelimede yok. Kelimeler 4, 5 ya da 6 harfli; yolda bir de Arada durağı var.</p>
+    <h3>Puan: taş × çarpan</h3>
+    <p>Her tahminde turkuaz harf <strong>10</strong>, turuncu harf <strong>4 taş</strong> getirir. Kelimeyi bulunca çarpan <strong>1 + kalan hak</strong> olur. Hızlı bulmak da bol taş toplamak da işe yarar.</p>
+    <p class="ornek-hesap">Örnek: 6 hakla 3. tahminde buldun ve 92 taş topladın. 3 hakkın kaldı, çarpan 4: <strong>92 × 4 = 368 puan</strong>.</p>
+    <h3>Can ve mürekkep</h3>
+    <p>3 canla başlarsın. Bulamadığın bulmacada 1 can gider; canın biterse sefer biter. Bulmacalar <strong>mürekkep</strong> kazandırır. Elinde tuttuğun her 5 mürekkep için bulmaca sonunda +1 faiz gelir (en fazla 5).</p>
+    <h3>Tılsımlar ve iksirler</h3>
+    <p>Pazarda mürekkeple <strong>tılsım</strong> (sefer boyunca kalır, en fazla 5) ve <strong>iksir</strong> (tek kullanımlık, en fazla 3) alırsın. Tılsımlar puanını katlar; hangilerini bir araya getirdiğin her seferi farklı yapar. Üstteki simgelere dokunup ne işe yaradıklarını görebilirsin.</p>
+    <h3>Boss'lar</h3>
+    <p>Mini boss ve ada bekçisi bulmacaya bir kural ekler:</p>
+    <ul class="boss-listesi">
+      <li>🐍 <strong>Şahmeran</strong>: her satırda bir kare yalan söyler.</li>
+      <li>🧞 <strong>Cin</strong>: renk yok, sadece kaç harfin nerede olduğu yazar.</li>
+      <li>👹 <strong>Karakoncolos</strong>: her tahminde bir karenin rengi sisli.</li>
+    </ul>
+    <p>Boss'ta kaybedersen 1 can gider ve yeni bir kelimeyle tekrar denersin. Bekçiyi geçmek için ayrıca en az 200 puan gerekir.</p>
+    <p class="not">Bu bir deneme sürümü: şimdilik tek ada var ve kurallar değişebilir. Görüşlerini iletisim@harfoni.com adresine yazabilirsin.</p>
+  </dialog>
+
+  <dialog id="esya-penceresi" class="pencere">
+    <button class="kapat" type="button" data-kapat aria-label="Kapat">×</button>
+    <div id="esya-icerik"></div>
+  </dialog>
+
+  <script type="module" src="js/adalar/sefer.js"></script>
+  <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");</script>
+</body>
+</html>
