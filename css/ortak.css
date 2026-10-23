@@ -128,7 +128,9 @@ button { font: inherit; color: inherit; }
 .tahta {
   display: grid;
   --satir-sayisi: 6;
-  grid-template-rows: repeat(var(--satir-sayisi), 1fr);
+  /* minmax(0, 1fr): karelerin içindeki etiketler (ör. Palavra'daki YALAN)
+     Safari'de satırı büyütüp tahtayı taşırmasın. */
+  grid-template-rows: repeat(var(--satir-sayisi), minmax(0, 1fr));
   gap: 6px;
   /* Ekrana hem genişlikte hem yükseklikte sığ; kareler 70 pikseli geçmesin. */
   width: min(100cqw, calc(100cqh * 5 / var(--satir-sayisi)), 350px);
@@ -137,13 +139,15 @@ button { font: inherit; color: inherit; }
 
 .satir {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
 .kare {
   display: grid;
   place-items: center;
+  min-width: 0;
+  min-height: 0;
   border: 2px solid var(--cizgi);
   border-radius: 6px;
   font-size: clamp(1.4rem, 7vw, 2rem);

@@ -21,14 +21,16 @@ ZEMIN = "#121417"
 VURGU = "#17a398"
 BEYAZ = "#ffffff"
 
-# (ham dosya, üst satır, alt satır)
+# (ham dosya, üst satır, alt satır). Sıra önemli: arama sonuçlarında ilk
+# 2-3 görsel görünür. Ham görüntüler simülatörde örnek verilerle çekildi.
 SAHNELER = [
-    ("1-klasik.jpg", "Klasik", "Günün kelimesini 6 tahminde bul"),
-    ("2-palavra.jpg", "Palavra", "Her satırda bir renk yalan söylüyor"),
-    ("3-arada.jpg", "Arada", "Kelime iki kelimenin arasında"),
-    ("4-muamma.jpg", "Muamma", "Kaç harf doğru, ama hangileri?"),
-    ("5-istatistik.jpg", "Serini koru", "Sonucunu arkadaşlarınla paylaş"),
-    ("6-anasayfa.jpg", "4 oyun, her gün", "Türkçe günlük kelime oyunları"),
+    ("yeni-duello.png", "Arkadaşına meydan oku", "Aynı kelime, daha az tahminde bulan kazanır"),
+    ("yeni-anasayfa.png", "Her gün 4 yeni bulmaca", "Puan topla, haftalık sıralamaya gir"),
+    ("yeni-klasik.png", "Klasik", "Günün kelimesini 6 tahminde bul"),
+    ("yeni-siralama.png", "Arkadaşlarınla yarış", "Grubunu kur, her gün kim önde görün"),
+    ("yeni-palavra.png", "Palavra", "Her satırda bir renk yalan söylüyor"),
+    ("yeni-arada.png", "Arada", "Kelime alfabede iki kelimenin arasında"),
+    ("yeni-muamma.png", "Muamma", "Kaç harf doğru, ama hangileri?"),
 ]
 
 # (ön ek, genişlik, yükseklik): Google Play 9:16, App Store 6,9 inç iPhone
@@ -36,8 +38,13 @@ BOYUTLAR = [("play-ekran", 1080, 1920), ("appstore-ekran", 1320, 2868)]
 
 
 def ortali(cizim, genislik, y, metin, boyut, renk):
-    font = ImageFont.truetype(YAZI_TIPI, boyut)
-    sol, _, sag, _ = cizim.textbbox((0, 0), metin, font=font)
+    # Uzun başlıklar kenarlara taşmasın diye yazı küçülür.
+    while True:
+        font = ImageFont.truetype(YAZI_TIPI, boyut)
+        sol, _, sag, _ = cizim.textbbox((0, 0), metin, font=font)
+        if sag - sol <= genislik * 0.9 or boyut <= 20:
+            break
+        boyut -= 2
     cizim.text(((genislik - (sag - sol)) / 2 - sol, y), metin, font=font, fill=renk)
 
 
