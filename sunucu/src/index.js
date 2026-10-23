@@ -120,6 +120,7 @@ export default {
     if (url.pathname.startsWith("/yonetim/") && istek.method === "POST") {
       if (!yetkiliMi(istek, env)) return new Response(JSON.stringify({ hata: "Yetkisiz" }), { status: 401 });
       if (url.pathname === "/yonetim/liste") return Response.json(await oyuncular.yonetimListesi());
+      if (url.pathname === "/yonetim/ara") return Response.json(await oyuncular.oyuncuAra((await istek.json()).ad));
       if (url.pathname === "/yonetim/istatistik") return Response.json(await oyuncular.istatistik(bugununNumarasi()));
       if (url.pathname === "/yonetim/islem") {
         const { islem, hedef } = await istek.json();

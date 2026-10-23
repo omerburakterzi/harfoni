@@ -48,7 +48,11 @@ export const YONETIM_SAYFASI = `<!doctype html>
 <body>
 <main>
   <h1>Harfoni · Yönetim</h1>
-  <nav class="sekmeler"><button id="sekme-istatistik" class="ana">İstatistikler</button><button id="sekme-sikayet">Şikâyetler</button></nav>
+  <nav class="sekmeler"><button id="sekme-istatistik" class="ana">İstatistikler</button><button id="sekme-sikayet">Şikâyetler</button><button id="sekme-oyuncu">Oyuncular</button></nav>
+  <section id="oyuncular" hidden>
+    <form id="ara-formu" class="dugmeler"><input id="ara" type="search" placeholder="Takma adın bir kısmını yaz"><button class="ana">Ara</button></form>
+    <div id="sonuclar"></div>
+  </section>
   <section id="istatistik" hidden>
     <div id="toplamlar" class="toplamlar"></div>
     <p class="soluk">Sadece takma adı olan oyuncuların bitirdiği günlük oyunlar sayılır; gerçek oynanma bunun üstündedir. Düello: puanlı maçlar (bot ve puansız hariç).</p>
@@ -114,15 +118,40 @@ async function istatistikYukle() {
     v.gunler.map((g) => "<tr><td>" + g.tarih.slice(8, 10) + "." + g.tarih.slice(5, 7) + "</td><td>" + [g.kisi, g.klasik, g.palavra, g.arada, g.muamma, g.dordu, g.duello, g.yeniOyuncu].join("</td><td>") + "</td></tr>").join("");
 }
 
+async function oyuncuAra() {
+  const liste = await api("/yonetim/ara", { ad: $("ara").value });
+  $("sonuclar").innerHTML = liste.length ? "" : '<p class="soluk">Bulunamadı.</p>';
+  for (const o of liste) {
+    const kart = document.createElement("div");
+    kart.className = "kart";
+    kart.innerHTML = '<strong>' + kacis(o.ad) + '</strong>' + (o.yasakli ? '<span class="etiket">Uzaklaştırıldı</span>' : "") +
+      '<div class="soluk">Hızlı ' + o.puanlar.hizli + ' · Uzun ' + o.puanlar.uzun + ' · kayıt ' + new Date(o.olusturma).toLocaleDateString("tr-TR") + '</div>' +
+      '<div class="dugmeler"><button data-islem="ad-sifirla">Adını sıfırla</button>' +
+      (o.yasakli ? '<button data-islem="yasak-kaldir">Uzaklaştırmayı kaldır</button>' : '<button class="tehlike" data-islem="yasakla">Uzaklaştır</button>') + '</div>';
+    for (const b of kart.querySelectorAll("button")) b.onclick = async () => {
+      if (b.dataset.islem === "yasakla" && !confirm(o.ad + " Düello ve sıralamalardan uzaklaştırılsın mı?")) return;
+      await api("/yonetim/islem", { islem: b.dataset.islem, hedef: o.id });
+      oyuncuAra();
+    };
+    $("sonuclar").appendChild(kart);
+  }
+}
+$("ara-formu").onsubmit = (e) => { e.preventDefault(); oyuncuAra().catch(() => {}); };
+
 function sekme(ad) {
   $("istatistik").hidden = ad !== "istatistik";
   $("liste").hidden = ad !== "sikayet";
+  $("oyuncular").hidden = ad !== "oyuncu";
   $("sekme-istatistik").className = ad === "istatistik" ? "ana" : "";
   $("sekme-sikayet").className = ad === "sikayet" ? "ana" : "";
-  (ad === "istatistik" ? istatistikYukle() : yukle()).catch(() => {});
+  $("sekme-oyuncu").className = ad === "oyuncu" ? "ana" : "";
+  if (ad === "istatistik") istatistikYukle().catch(() => {});
+  if (ad === "sikayet") yukle().catch(() => {});
+  if (ad === "oyuncu") $("ara").focus();
 }
 $("sekme-istatistik").onclick = () => sekme("istatistik");
 $("sekme-sikayet").onclick = () => sekme("sikayet");
+$("sekme-oyuncu").onclick = () => sekme("oyuncu");
 
 $("giris").onsubmit = (e) => {
   e.preventDefault();

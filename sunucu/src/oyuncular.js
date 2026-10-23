@@ -655,4 +655,16 @@ export class Oyuncular extends DurableObject {
       },
     };
   }
+
+  // Yönetim: ada göre oyuncu arama (büyük-küçük harf duyarsız, Türkçe).
+  oyuncuAra(metin) {
+    const aranan = String(metin || "").toLocaleLowerCase("tr-TR").trim();
+    if (!aranan) return [];
+    return this.sql
+      .exec("SELECT id, ad, yasakli, olusturma FROM oyuncu ORDER BY olusturma DESC")
+      .toArray()
+      .filter((o) => o.ad.toLocaleLowerCase("tr-TR").includes(aranan))
+      .slice(0, 30)
+      .map((o) => ({ ...o, puanlar: Object.fromEntries(MOD_ADLARI.map((m) => [m, this.#derece(o.id, m).puan])) }));
+  }
 }
