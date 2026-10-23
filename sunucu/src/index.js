@@ -53,14 +53,23 @@ function cevap(veri, kaynak, durum = 200) {
 // Takma adlar rastgele rakiplere de göründüğü için kaba sözler engellenir.
 // Uzun kökler kelimenin içinde de aranır; kısalar sadece tek başına kelimeyse
 // (ör. "klasik" içindeki "sik" sorun değil).
-const YASAK_KOKLER = ["orospu", "yarrak", "amcık", "amına", "amina", "siktir", "sikerim", "sikik", "pezevenk", "kahpe", "yavşak", "şerefsiz", "kaltak", "dalyarak", "taşak", "gavat", "puşt", "fuck", "bitch", "porno", "pussy", "dick"];
-const YASAK_KELIMELER = ["amk", "aq", "oç", "piç", "sik", "göt", "ibne", "sex", "seks", "am"];
+const YASAK_KOKLER = [
+  "orospu", "orosbu", "oruspu", "yarrak", "yarak", "yarram", "amcık", "amcik", "amına", "amina", "amını", "amk", "siktir",
+  "pezevenk", "kahpe", "yavşak", "yavsak", "şerefsiz", "serefsiz", "kaltak", "dalyarak", "taşak", "tasak", "gavat",
+  "puşt", "pust", "götveren", "gotveren", "ibne", "fuck", "bitch", "porno", "pussy", "dick",
+];
+const YASAK_KELIMELER = ["aq", "oç", "oc", "piç", "pic", "göt", "got", "sex", "seks", "am", "sg"];
+// "sik" ile başlayan kelimeler (siker, sikim, sikik…) engellenir; bunlar hariç:
+const MASUM_SIK = ["sikke", "siklet", "siklon", "siklam", "siklik", "siklus", "sikloheks", "sikayet", "sikâyet"];
 
 function kabaMi(ad) {
   const kucuk = ad.toLocaleLowerCase("tr-TR");
   const bitisik = kucuk.replace(/[^\p{L}]/gu, "");
   if (YASAK_KOKLER.some((kok) => bitisik.includes(kok))) return true;
-  return kucuk.split(/[^\p{L}]+/u).some((kelime) => YASAK_KELIMELER.includes(kelime));
+  const kelimeler = kucuk.split(/[^\p{L}]+/u).filter(Boolean);
+  if (kelimeler.some((k) => YASAK_KELIMELER.includes(k))) return true;
+  // Kelime başındaki "sik" (masum kelimeler hariç); "klasik" gibi içinde geçenler sorun değil.
+  return kelimeler.some((k) => k.startsWith("sik") && !MASUM_SIK.some((m) => k.startsWith(m)));
 }
 
 // Grup adı: 2-24 karakter, takma adla aynı kurallar.
