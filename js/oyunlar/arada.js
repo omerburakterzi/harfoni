@@ -10,6 +10,7 @@ import { klavyeKur } from "../ortak/klavye.js";
 import { bildir } from "../ortak/arayuz.js";
 import { sayfaKur } from "../ortak/sayfa.js";
 import { siralamaKur, gunlukSonucuGonder } from "../ortak/siralama.js";
+import { cozulduysePuanIste } from "../ortak/puan-iste.js";
 
 const OYUN = "arada";
 const HAK = 15;
@@ -244,6 +245,7 @@ function bitir(sonuc) {
     bitisAni = Date.now();
     kaydet();
     siralamayaGonder();
+    if (kazandi) cozulduysePuanIste(gun);
   }
   sayfa.sonucuGoster({ bitti, kazandi, tahminSayisi: tahminler.length, cevap }, 1700);
 }

@@ -10,6 +10,7 @@ import { klavyeKur } from "./klavye.js";
 import { bildir } from "./arayuz.js";
 import { sayfaKur } from "./sayfa.js";
 import { degerlendir } from "./degerlendir.js";
+import { cozulduysePuanIste } from "./puan-iste.js";
 
 const UZUNLUK = 5;
 const CEVIRME_ARASI = 280; // ms, harflerin sırayla dönmesi
@@ -190,6 +191,7 @@ export function tahminOyunuKur(ayarlar) {
       bitisAni = Date.now();
       kaydet();
       gunlukBitti();
+      if (kazandi) cozulduysePuanIste(gun);
     }
     sonucuGoster(1700);
   }

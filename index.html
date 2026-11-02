@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
   <meta name="description" content="Türkçe günlük kelime oyunları.">
   <title>Harfoni</title>
+  <meta name="apple-itunes-app" content="app-id=6818959641">
   <link rel="stylesheet" href="css/ortak.css">
   <link rel="manifest" href="manifest.webmanifest">
   <script defer src="js/olcum.js"></script>
@@ -37,6 +38,15 @@
       <span class="pk-metin"><strong id="pk-baslik"></strong><small id="pk-alt"></small></span>
       <span id="pk-seri" class="pk-seri"></span>
     </button>
+
+    <div id="magaza-seridi" class="magaza-seridi" hidden>
+      <a id="ms-baglanti" class="ms-baglanti" href="#">
+        <img src="gorseller/apple-touch-icon.png" alt="" width="40" height="40">
+        <span><strong>Harfoni uygulaması</strong><small>Google Play'de ücretsiz</small></span>
+        <span class="ms-dugme">İndir</span>
+      </a>
+      <button id="ms-kapat" class="ms-kapat" type="button" aria-label="Kapat">×</button>
+    </div>
 
     <div class="oyun-listesi">
       <a class="oyun-karti duello-karti" href="duello.html">
@@ -109,8 +119,12 @@
     </div>
 
     <div id="kurulum" class="kurulum" hidden>
-      <button id="kur-dugmesi" class="ana-dugme" type="button" hidden>Uygulamayı yükle</button>
-      <p id="ios-ipucu" class="not" hidden>Uygulama gibi kullanmak için Safari'de <strong>Paylaş</strong> düğmesine, sonra <strong>Ana Ekrana Ekle</strong>'ye dokun.</p>
+      <p class="kurulum-baslik">Harfoni'yi telefonuna indir</p>
+      <div class="magaza-baglantilari">
+        <a id="kur-ios" class="magaza-dugmesi" href="#">App Store</a>
+        <a id="kur-android" class="magaza-dugmesi" href="#">Google Play</a>
+      </div>
+      <button id="kur-dugmesi" class="metin-dugme" type="button" hidden>ya da bu tarayıcıya uygulama olarak ekle</button>
     </div>
 
     <p class="alt-bilgi"><a href="hakkinda.html">Hakkında</a> · <a href="gizlilik.html">Gizlilik</a></p>
@@ -120,18 +134,47 @@
   <script>
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 
-    // Uygulama olarak kurulu değilse kurulum seçeneğini göster.
-    // Mağaza uygulamasının içindeysek (Capacitor) hiç gösterme.
+    // Mağaza bağlantıları. Uygulamanın içinde (Capacitor) ya da ana ekrana
+    // eklenmiş sürümde hiç gösterme.
+    const IOS_ADRESI = "https://apps.apple.com/tr/app/id6818959641";
+    const ANDROID_ADRESI = "https://play.google.com/store/apps/details?id=com.harfoni.app&referrer=utm_source%3Dharfoni.com%26utm_medium%3Dsite";
     const kurulu = matchMedia("(display-mode: standalone)").matches || navigator.standalone || Boolean(window.Capacitor);
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const android = /android/i.test(navigator.userAgent);
     const kurulum = document.getElementById("kurulum");
+    const iosDugmesi = document.getElementById("kur-ios");
+    const androidDugmesi = document.getElementById("kur-android");
+    iosDugmesi.href = IOS_ADRESI;
+    androidDugmesi.href = ANDROID_ADRESI;
+
+    if (!kurulu) {
+      kurulum.hidden = false;
+      // Telefonda sadece o telefonun mağazası; bilgisayarda ikisi de.
+      if (ios) androidDugmesi.hidden = true;
+      if (android) iosDugmesi.hidden = true;
+    }
+
+    // Android tarayıcıda üstte kapatılabilir şerit. iPhone'da bunu Safari'nin
+    // kendi şeridi yapıyor (apple-itunes-app etiketi).
+    const SERIT_ANAHTARI = "harfoni.magazaSeridiKapandi";
+    let kapandi = 0;
+    try { kapandi = Number(localStorage.getItem(SERIT_ANAHTARI)) || 0; } catch {}
+    if (android && !kurulu && Date.now() - kapandi > 14 * 864e5) {
+      document.getElementById("ms-baglanti").href = ANDROID_ADRESI;
+      document.getElementById("magaza-seridi").hidden = false;
+      document.getElementById("ms-kapat").addEventListener("click", () => {
+        document.getElementById("magaza-seridi").hidden = true;
+        try { localStorage.setItem(SERIT_ANAHTARI, String(Date.now())); } catch {}
+      });
+    }
+
+    // Bilgisayarda Chrome/Edge: tarayıcının kendi kurulum penceresi de dursun.
     const dugme = document.getElementById("kur-dugmesi");
     let kurulumIstegi;
-
-    // Android ve masaüstü Chrome/Edge: tarayıcının kendi kurulum penceresi
     addEventListener("beforeinstallprompt", (olay) => {
+      if (android) return; // Android'de mağaza uygulaması öncelikli
       olay.preventDefault();
       kurulumIstegi = olay;
-      kurulum.hidden = false;
       dugme.hidden = false;
     });
     dugme.addEventListener("click", async () => {
@@ -139,15 +182,8 @@
       kurulumIstegi.prompt();
       await kurulumIstegi.userChoice;
       kurulumIstegi = null;
-      kurulum.hidden = true;
+      dugme.hidden = true;
     });
-
-    // iPhone/iPad Safari'de kurulum düğmesi yok; nasıl yapılacağını anlat.
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    if (ios && !kurulu) {
-      kurulum.hidden = false;
-      document.getElementById("ios-ipucu").hidden = false;
-    }
   </script>
 </body>
 </html>
