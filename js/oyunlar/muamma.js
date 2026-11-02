@@ -42,11 +42,17 @@ oyun.tahta.addEventListener("click", (e) => {
 });
 
 // Bir harf herhangi bir karede "doğru yerde" işaretliyse klavyede de öyle
-// görünür; yoksa "başka yerde", o da yoksa "yok".
+// görünür; yoksa "başka yerde", o da yoksa "yok". Beşi de kırmızı gelen
+// satırların harfleri her zaman "yok" görünür.
 function klavyeyiIsaretlereGoreBoya() {
   oyun.klavye.temizle();
   for (const kare of oyun.tahta.querySelectorAll(".kare[data-isaret]")) {
     oyun.klavye.boya(kucuk(kare.textContent), kare.dataset.isaret);
+  }
+  for (const satir of oyun.tahta.children) {
+    const yok = satir.querySelector('.sayilar [data-durum="yok"]');
+    if (yok?.textContent !== "5") continue;
+    for (const kare of satir.querySelectorAll(".kare")) oyun.klavye.boya(kucuk(kare.textContent), "yok", true);
   }
 }
 

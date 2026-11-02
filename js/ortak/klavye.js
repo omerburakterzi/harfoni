@@ -75,11 +75,12 @@ export function klavyeKur(kap, tusaBasildi) {
   });
 
   return {
-    boya(harf, durum) {
+    // zorla: kesin bilinen durum, öncekinin yerine geçer.
+    boya(harf, durum, zorla = false) {
       const btn = tuslar[harf];
       if (!btn) return;
       const eski = btn.dataset.durum;
-      if (!eski || ONCELIK[durum] > ONCELIK[eski]) btn.dataset.durum = durum;
+      if (zorla || !eski || ONCELIK[durum] > ONCELIK[eski]) btn.dataset.durum = durum;
     },
     temizle() {
       for (const btn of Object.values(tuslar)) delete btn.dataset.durum;

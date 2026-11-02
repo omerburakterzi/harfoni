@@ -120,6 +120,8 @@ export function tahminOyunuKur(ayarlar) {
           .map((d) => `<span data-durum="${d}">${adet[d]}</span>`)
           .join("");
         sayilar.classList.add("gorunur");
+        // Hiçbir harf kelimede yoksa bu kesin bilgi: hepsini klavyede karart.
+        if (adet.yok === UZUNLUK) for (const harf of tahmin) klavye.boya(harf, "yok", true);
       };
       if (animasyonlu) setTimeout(goster, UZUNLUK * CEVIRME_ARASI + 100);
       else goster();

@@ -8,6 +8,25 @@
   if (uygulamada) {
     document.documentElement.classList.add("uygulama");
     gunlukHatirlatmayiKur();
+    geriTusunuKur();
+  }
+
+  // Android'de geri tuşu / kenardan kaydırma: önce açık pencereyi kapat,
+  // sonra bir önceki sayfaya dön, ana sayfadaysak uygulamayı arka plana al.
+  // Sayfalar "harfoni:geri" olayını iptal ederek kendileri karşılayabilir
+  // (ör. Düello'da maçtan çıkarken sormak için).
+  function geriTusunuKur() {
+    const { App } = capacitor.Plugins;
+    if (!App) return;
+    App.addListener("backButton", ({ canGoBack }) => {
+      const pencere = [...document.querySelectorAll("dialog[open]")].pop();
+      if (pencere) return pencere.close();
+      if (!dispatchEvent(new Event("harfoni:geri", { cancelable: true }))) return;
+      const anaSayfada = /\/(index\.html)?$/.test(location.pathname);
+      if (anaSayfada) App.minimizeApp();
+      else if (canGoBack) history.back();
+      else location.href = "index.html";
+    });
   }
 
   // "Bugünün bulmacaları hazır" bildirimi: oyuncu açarsa her gün seçtiği saatte.

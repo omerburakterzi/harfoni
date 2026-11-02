@@ -235,6 +235,15 @@ function ekranGoster(ad) {
   if (ad !== "oyun") $("geri-sayim-ortu").hidden = true;
 }
 
+// Android geri tuşu: aramadan, beklemeden ya da maçtan lobiye dön.
+addEventListener("harfoni:geri", (olay) => {
+  const ekran = ["arama", "bekleme", "oyun"].find((ad) => !$(`ekran-${ad}`).hidden);
+  if (!ekran) return;
+  olay.preventDefault();
+  if (ekran === "oyun" && durum?.durum === "oyun" && !confirm("Maçtan çıkmak istiyor musun? Süren işlemeye devam eder.")) return;
+  lobiyeDon();
+});
+
 function lobiyeDon(mesaj) {
   baglantiyiKapat();
   aramayiBitir();
